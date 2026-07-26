@@ -1,0 +1,52 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function OnboardingPage() {
+  const router = useRouter();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit() {
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/user/complete-profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email }),
+      });
+      if (!res.ok) throw new Error("Failed to save profile");
+      router.push("/dashboard");
+    } catch {
+      setError("Couldn't save your details. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ maxWidth: 360, margin: "80px auto", padding: "0 16px" }}>
+      <h1>Tell us about you</h1>
+      <input
+        type="text"
+        placeholder="Full name"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        type="email"
+        placeholder="Email address"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <button onClick={handleSubmit} disabled={loading || !name || !email}>
+        {loading ? "Saving..." : "Continue"}
+      </button>
+      {error && <p style={{ color: "red" }}>{error}</p>}
+    </div>
+  );
+}
