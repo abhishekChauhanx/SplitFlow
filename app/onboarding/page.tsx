@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 export default function OnboardingPage() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +17,7 @@ export default function OnboardingPage() {
       const res = await fetch("/api/user/complete-profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email }),
+        body: JSON.stringify({ name, phone }),
       });
       if (!res.ok) throw new Error("Failed to save profile");
       router.push("/dashboard");
@@ -31,19 +31,9 @@ export default function OnboardingPage() {
   return (
     <div style={{ maxWidth: 360, margin: "80px auto", padding: "0 16px" }}>
       <h1>Tell us about you</h1>
-      <input
-        type="text"
-        placeholder="Full name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <input
-        type="email"
-        placeholder="Email address"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <button onClick={handleSubmit} disabled={loading || !name || !email}>
+      <input type="text" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+      <input type="tel" placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} />
+      <button onClick={handleSubmit} disabled={loading || !name || !phone}>
         {loading ? "Saving..." : "Continue"}
       </button>
       {error && <p style={{ color: "red" }}>{error}</p>}
