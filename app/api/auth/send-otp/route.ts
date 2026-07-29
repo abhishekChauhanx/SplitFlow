@@ -10,7 +10,8 @@ export async function POST(req: NextRequest) {
     await saveOtp(email, otp);
     await sendOtpEmail(email, otp);
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (error) {
+    console.error("send-otp failed:", error);
     return NextResponse.json({ error: "Failed to send OTP" }, { status: 400 });
   }
 }
