@@ -11,7 +11,8 @@ export async function createSession(userId: string) {
     .setExpirationTime("30d")
     .sign(secret);
 
-  cookies().set(COOKIE_NAME, token, {
+  const cookieStore = await cookies(); // <- must await now
+  cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -21,7 +22,8 @@ export async function createSession(userId: string) {
 }
 
 export async function getSessionUserId(): Promise<string | null> {
-  const token = cookies().get(COOKIE_NAME)?.value;
+  const cookieStore = await cookies(); // <- must await here too
+  const token = cookieStore.get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret);

@@ -10,11 +10,13 @@ const transporter = nodemailer.createTransport({
 });
 
 export async function sendOtpEmail(email: string, otp: string) {
-  await transporter.sendMail({
-    from: '"Split Expense App" <noreply@yourdomain.com>',
+  const info = await transporter.sendMail({
+    from: '"Split Expense App" <rajputabhic32@gmail.com>', // <- your actual verified sender
     to: email,
     subject: "Your sign-in code",
     text: `Your code is ${otp}. It expires in 5 minutes.`,
     html: `<p>Your code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`,
   });
+  console.log("Brevo SMTP response:", info);
+  return info;
 }
