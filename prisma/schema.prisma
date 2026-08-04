@@ -70,3 +70,14 @@ model OtpCode {
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
+
+model Settlement {
+  id            String   @id @default(cuid())
+  groupId       String
+  fromUserId    String
+  toUserId      String
+  amountPaise   Int
+  status        String   @default("pending") // pending | confirmed
+  createdAt     DateTime @default(now())
+  confirmedAt   DateTime?
+}

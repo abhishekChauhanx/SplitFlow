@@ -14,16 +14,14 @@ export async function POST(req: NextRequest) {
   let user = await prisma.user.findUnique({ where: { email } });
 
   if (!user) {
+    // Brand new email — never seen before
     user = await prisma.user.create({ data: { email } });
     await createSession(user.id);
     return NextResponse.json({ redirectTo: "/onboarding" });
   }
 
+  // Email already exists in the DB — skip onboarding entirely, even if
+  // name/phone were never filled in
   await createSession(user.id);
-
-  if (!user.name || !user.phone) {
-    return NextResponse.json({ redirectTo: "/onboarding" });
-  }
-
   return NextResponse.json({ redirectTo: "/dashboard" });
 }

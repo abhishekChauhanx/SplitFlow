@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getRawBalances } from "@/lib/balances";
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const net = await getRawBalances(params.id);
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const net = await getRawBalances(id);
   const members = await prisma.groupMember.findMany({
-    where: { groupId: params.id },
+    where: { groupId: id },
     include: { user: true },
   });
 
