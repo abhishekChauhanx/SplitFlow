@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import QRCode from "qrcode";
 
 export default function SettlePage() {
@@ -9,6 +10,11 @@ export default function SettlePage() {
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [qrCodes, setQrCodes] = useState<Record<number, string>>({});
   const [partialAmounts, setPartialAmounts] = useState<Record<number, string>>({});
+  const [history, setHistory] = useState<any[]>([]);
+
+  function loadHistory() {
+    fetch(`/api/groups/${id}/settlement-history`).then((r) => r.json()).then(setHistory);
+  }
 
   useEffect(() => {
     fetch(`/api/groups/${id}/settlements`).then((r) => r.json()).then(async (data) => {
@@ -24,6 +30,7 @@ export default function SettlePage() {
       }
       setQrCodes(codes);
     });
+    loadHistory();
   }, [id]);
 
   async function recordSettlement(index: number, s: any) {
@@ -36,7 +43,24 @@ export default function SettlePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ toUserId: s.toUserId, amountPaise: amountToSend }),
     });
-    alert("Settlement recorded as pending — confirm once the payment is actually made.");
+    alert("Settlement recorded — both sides need to confirm below once payment is made.");
+    loadHistory();
+  }
+
+  async function confirm(settlementId: string) {
+    await fetch(`/api/settlements/${settlementId}/confirm`, { method: "POST" });
+    loadHistory();
+  }
+
+  async function dispute(settlementId: string) {
+    const reason = prompt("What doesn't match? (e.g. wrong amount)");
+    if (!reason) return;
+    await fetch(`/api/settlements/${settlementId}/dispute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    });
+    loadHistory();
   }
 
   return (
@@ -76,6 +100,23 @@ export default function SettlePage() {
           </div>
         </div>
       ))}
+
+      <h2>Settlement history</h2>
+      <ul>
+        {history.map((h) => (
+          <li key={h.id} style={{ marginBottom: 12 }}>
+            {h.fromName} → {h.toName}: ₹{(h.amountPaise / 100).toFixed(2)} — <strong>{h.status}</strong>
+            {h.status !== "both_confirmed" && h.status !== "disputed" && (
+              <>
+                {" "}
+                <button onClick={() => confirm(h.id)}>Confirm my side</button>
+                <button onClick={() => dispute(h.id)}>Dispute</button>
+              </>
+            )}
+            {h.status === "disputed" && <span style={{ color: "red" }}> — {h.disputeReason}</span>}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

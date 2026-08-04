@@ -72,12 +72,14 @@ model OtpCode {
 }
 
 model Settlement {
-  id            String   @id @default(cuid())
-  groupId       String
-  fromUserId    String
-  toUserId      String
-  amountPaise   Int
-  status        String   @default("pending") // pending | confirmed
-  createdAt     DateTime @default(now())
-  confirmedAt   DateTime?
+  id                String    @id @default(cuid())
+  groupId           String
+  fromUserId        String
+  toUserId          String
+  amountPaise       Int
+  status            String    @default("pending") // pending | payer_confirmed | both_confirmed | disputed
+  payerConfirmedAt  DateTime?
+  payeeConfirmedAt  DateTime?
+  disputeReason     String?
+  createdAt         DateTime  @default(now())
 }
