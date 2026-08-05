@@ -51,6 +51,7 @@ model ExpenseSplit {
 enum SplitType {
   EQUAL
   EXACT
+  SHARES
 }
 model GroupMember {
   id       String   @id @default(cuid())
@@ -82,4 +83,19 @@ model Settlement {
   payeeConfirmedAt  DateTime?
   disputeReason     String?
   createdAt         DateTime  @default(now())
+}
+
+
+
+model RecurringTemplate {
+  id            String   @id @default(cuid())
+  groupId       String
+  description   String
+  amountPaise   Int
+  splitType     SplitType
+  shareUnits    Json?     // e.g. { "userId1": 20, "userId2": 12 } — meal counts, only used when splitType = SHARES
+  frequencyDays Int       // e.g. 30 for monthly, 7 for weekly
+  nextRunAt     DateTime
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
 }

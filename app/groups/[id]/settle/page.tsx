@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import QRCode from "qrcode";
 
 export default function SettlePage() {
@@ -11,38 +10,55 @@ export default function SettlePage() {
   const [qrCodes, setQrCodes] = useState<Record<number, string>>({});
   const [partialAmounts, setPartialAmounts] = useState<Record<number, string>>({});
   const [history, setHistory] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  async function generateQr(index: number, s: any, amountPaiseOverride?: number) {
+    if (!s.toUpiId) return;
+    const amountPaise = amountPaiseOverride ?? s.amountPaise;
+    const amountRupees = (amountPaise / 100).toFixed(2);
+    const upiUrl = `upi://pay?pa=${s.toUpiId}&pn=${encodeURIComponent(s.toName)}&am=${amountRupees}&cu=INR&tn=Settlement`;
+    const dataUrl = await QRCode.toDataURL(upiUrl);
+    setQrCodes((prev) => ({ ...prev, [index]: dataUrl }));
+  }
 
   function loadHistory() {
     fetch(`/api/groups/${id}/settlement-history`).then((r) => r.json()).then(setHistory);
   }
 
   useEffect(() => {
+    fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
     fetch(`/api/groups/${id}/settlements`).then((r) => r.json()).then(async (data) => {
       setSuggestions(data);
-      const codes: Record<number, string> = {};
-      for (let i = 0; i < data.length; i++) {
-        const s = data[i];
-        if (s.toUpiId) {
-          const amountRupees = (s.amountPaise / 100).toFixed(2);
-          const upiUrl = `upi://pay?pa=${s.toUpiId}&pn=${encodeURIComponent(s.toName)}&am=${amountRupees}&cu=INR&tn=Settlement`;
-          codes[i] = await QRCode.toDataURL(upiUrl);
-        }
-      }
-      setQrCodes(codes);
+      data.forEach((s: any, i: number) => generateQr(i, s));
     });
     loadHistory();
   }, [id]);
+
+  function handlePartialChange(index: number, value: string, s: any) {
+    setPartialAmounts({ ...partialAmounts, [index]: value });
+    const amountPaise = value ? Math.round(parseFloat(value) * 100) : s.amountPaise;
+    if (!isNaN(amountPaise) && amountPaise > 0) {
+      generateQr(index, s, amountPaise);
+    }
+  }
 
   async function recordSettlement(index: number, s: any) {
     const amountToSend = partialAmounts[index]
       ? Math.round(parseFloat(partialAmounts[index]) * 100)
       : s.amountPaise;
 
-    await fetch(`/api/groups/${id}/settlements`, {
+    const res = await fetch(`/api/groups/${id}/settlements`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ toUserId: s.toUserId, amountPaise: amountToSend }),
     });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || "Couldn't record settlement");
+      return;
+    }
+
     alert("Settlement recorded — both sides need to confirm below once payment is made.");
     loadHistory();
   }
@@ -68,38 +84,40 @@ export default function SettlePage() {
       <h1>Settle up</h1>
       {suggestions.length === 0 && <p>Everyone is settled up. 🎉</p>}
 
-      {suggestions.map((s, i) => (
-        <div key={i} style={{ border: "1px solid #333", padding: 16, marginBottom: 16 }}>
-          <p>{s.fromName} owes {s.toName}: ₹{(s.amountPaise / 100).toFixed(2)}</p>
+      {suggestions.map((s, i) => {
+        const isPayer = currentUserId === s.fromUserId;
+        return (
+          <div key={i} style={{ border: "1px solid #333", padding: 16, marginBottom: 16 }}>
+            <p>{s.fromName} owes {s.toName}: ₹{(s.amountPaise / 100).toFixed(2)}</p>
 
-          {!s.toUpiId && (
-            <p style={{ color: "orange" }}>
-              {s.toName} hasn't added a UPI ID yet — ask them to add one in their profile before settling.
-            </p>
-          )}
-
-          {s.toUpiId && qrCodes[i] && (
-            <>
-              <img src={qrCodes[i]} alt="UPI QR code" width={160} height={160} />
-              <p>
-                <a href={`upi://pay?pa=${s.toUpiId}&pn=${encodeURIComponent(s.toName)}&am=${(s.amountPaise/100).toFixed(2)}&cu=INR&tn=Settlement`}>
-                  Pay via UPI app
-                </a>
+            {!s.toUpiId && (
+              <p style={{ color: "orange" }}>
+                {s.toName} hasn't added a UPI ID yet — ask them to add one in their profile before settling.
               </p>
-            </>
-          )}
+            )}
 
-          <div>
-            <input
-              placeholder="Partial amount (optional)"
-              type="number"
-              value={partialAmounts[i] || ""}
-              onChange={(e) => setPartialAmounts({ ...partialAmounts, [i]: e.target.value })}
-            />
-            <button onClick={() => recordSettlement(i, s)}>Mark as paid</button>
+            {s.toUpiId && qrCodes[i] && (
+              <>
+                <img src={qrCodes[i]} alt="UPI QR code" width={160} height={160} />
+              </>
+            )}
+
+            {isPayer ? (
+              <div>
+                <input
+                  placeholder="Partial amount (optional)"
+                  type="number"
+                  value={partialAmounts[i] || ""}
+                  onChange={(e) => handlePartialChange(i, e.target.value, s)}
+                />
+                <button onClick={() => recordSettlement(i, s)}>Mark as paid</button>
+              </div>
+            ) : (
+              <p style={{ color: "#888" }}>Only {s.fromName} can mark this as paid.</p>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       <h2>Settlement history</h2>
       <ul>

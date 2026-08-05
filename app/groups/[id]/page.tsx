@@ -71,6 +71,8 @@ export default function GroupDetailPage() {
 <Link href={`/groups/${id}/balances`}>View balances</Link>
 {" | "}
 <Link href={`/groups/${id}/settle`}>Settle up</Link>
+
+<Link href={`/groups/${id}/recurring`}>Recurring expenses</Link>
       <h2>Members</h2>
       <ul>
         {members.map((m) => (

@@ -1,0 +1,103 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+
+export default function RecurringPage() {
+  const { id } = useParams();
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [description, setDescription] = useState("");
+  const [amount, setAmount] = useState("");
+  const [splitType, setSplitType] = useState("EQUAL");
+  const [frequencyDays, setFrequencyDays] = useState("30");
+  const [shareInputs, setShareInputs] = useState<Record<string, string>>({});
+
+  function load() {
+    fetch(`/api/groups/${id}/recurring`).then((r) => r.json()).then(setTemplates);
+  }
+
+  useEffect(() => {
+    load();
+    fetch(`/api/groups/${id}`).then((r) => r.json()).then((g) => setMembers(g.members));
+  }, [id]);
+
+  async function createTemplate() {
+    const amountPaise = Math.round(parseFloat(amount) * 100);
+    const shareUnits =
+      splitType === "SHARES"
+        ? Object.fromEntries(
+            Object.entries(shareInputs)
+              .filter(([, v]) => v)
+              .map(([userId, v]) => [userId, parseInt(v)])
+          )
+        : undefined;
+
+    await fetch(`/api/groups/${id}/recurring`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description, amountPaise, splitType, shareUnits, frequencyDays: parseInt(frequencyDays) }),
+    });
+    setDescription("");
+    setAmount("");
+    load();
+  }
+
+  async function runNow() {
+    const res = await fetch("/api/cron/run-recurring", { method: "POST" });
+    const data = await res.json();
+    alert(`Generated ${data.generated} expense(s)`);
+    load();
+  }
+
+  return (
+    <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+      <h1>Recurring expenses</h1>
+
+      <h2>Create a template</h2>
+      <input placeholder="Description (e.g. Rent, Mess bill)" value={description} onChange={(e) => setDescription(e.target.value)} />
+      <input placeholder="Amount (₹)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <select value={splitType} onChange={(e) => setSplitType(e.target.value)}>
+        <option value="EQUAL">Equal split</option>
+        <option value="SHARES">By shares (e.g. meals eaten)</option>
+      </select>
+      <input placeholder="Repeats every N days (30 = monthly)" type="number" value={frequencyDays} onChange={(e) => setFrequencyDays(e.target.value)} />
+
+      {splitType === "SHARES" && (
+        <div>
+          <p>Enter each person's share units (e.g. number of meals):</p>
+          {members.map((m) => (
+            <div key={m.userId}>
+              <label>{m.user.name || m.user.email}: </label>
+              <input
+                type="number"
+                value={shareInputs[m.userId] || ""}
+                onChange={(e) => setShareInputs({ ...shareInputs, [m.userId]: e.target.value })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button onClick={createTemplate} disabled={!description || !amount}>Create template</button>
+
+      <h2>Active templates</h2>
+      <ul>
+        {templates.map((t) => (
+          <li key={t.id}>
+            {t.description} — ₹{(t.amountPaise / 100).toFixed(2)} every {t.frequencyDays} days
+            ({t.splitType}) — next run: {new Date(t.nextRunAt).toLocaleDateString()}
+          </li>
+        ))}
+      </ul>
+
+      <h2>Testing</h2>
+      <button onClick={runNow}>Run due recurring expenses now</button>
+      <p style={{ color: "#888", fontSize: 12 }}>
+        In production this button doesn't exist — a scheduled job (e.g. Vercel Cron) calls
+        /api/cron/run-recurring automatically on a schedule. This button is here so you can
+        manually trigger it during development instead of waiting for real time to pass.
+      </p>
+    </div>
+  );
+}

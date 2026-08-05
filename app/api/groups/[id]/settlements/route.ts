@@ -34,10 +34,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { toUserId, amountPaise } = await req.json();
 
+  if (userId === toUserId) {
+    return NextResponse.json({ error: "You can't record a payment to yourself" }, { status: 400 });
+  }
+
   const settlement = await prisma.settlement.create({
     data: {
       groupId: id,
-      fromUserId: userId,
+      fromUserId: userId, // the logged-in person IS the payer, always
       toUserId,
       amountPaise,
       status: "pending",
