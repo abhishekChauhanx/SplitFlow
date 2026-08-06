@@ -12,11 +12,25 @@ export default function GroupDetailPage() {
   const [amount, setAmount] = useState("");
   const [paidById, setPaidById] = useState("");
   const [warning, setWarning] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // FIX 1: was missing
   const [memberEmail, setMemberEmail] = useState("");
   const [memberError, setMemberError] = useState<string | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [placeholderName, setPlaceholderName] = useState("");
+  const [placeholderPhone, setPlaceholderPhone] = useState("");
+  const [showPlaceholder, setShowPlaceholder] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<string | null>(null);
+  const [editDesc, setEditDesc] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editPaidById, setEditPaidById] = useState("");
+  const [expenseSplitType, setExpenseSplitType] = useState("EQUAL");
+  const [exactInputs, setExactInputs] = useState<Record<string, string>>({});
+  const [percentInputs, setPercentInputs] = useState<Record<string, string>>({});
+  const [shareInputs, setShareInputs] = useState<Record<string, string>>({}); // FIX 4: was missing
 
   function loadGroup() {
     fetch(`/api/groups/${id}`).then((r) => r.json()).then((group) => {
+      if (!group || !group.members) return;
       setMembers(group.members);
       if (group.members.length > 0) setPaidById(group.members[0].userId);
     });
@@ -27,17 +41,95 @@ export default function GroupDetailPage() {
     loadGroup();
   }, [id]);
 
+  async function deleteExpense(expenseId: string) {
+    if (!confirm("Delete this expense? Balances will recalculate.")) return;
+    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error);
+      return;
+    }
+    setExpenses(expenses.filter((e) => e.id !== expenseId));
+  }
+
+  async function saveEditExpense(expenseId: string) {
+    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: editDesc,
+        amountPaise: Math.round(parseFloat(editAmount) * 100),
+        paidById: editPaidById,
+      }),
+    });
+    if (!res.ok) { const d = await res.json(); alert(d.error); return; }
+    const updated = await res.json();
+    setExpenses(expenses.map((e) => (e.id === expenseId ? updated : e)));
+    setEditingExpense(null);
+  }
+
+  async function generateInvite() {
+    const res = await fetch(`/api/groups/${id}/invite`, { method: "POST" });
+    const data = await res.json();
+    setInviteLink(data.link);
+  }
+
+  async function addPlaceholder() {
+    await fetch(`/api/groups/${id}/placeholder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: placeholderName, phone: placeholderPhone }),
+    });
+    setPlaceholderName("");
+    setPlaceholderPhone("");
+    setShowPlaceholder(false);
+    loadGroup();
+  }
+
   async function addExpense(confirmDuplicate = false) {
+    setError(null);
     const amountPaise = Math.round(parseFloat(amount) * 100);
+
+    const exactAmounts = expenseSplitType === "EXACT"
+      ? Object.fromEntries(Object.entries(exactInputs).map(([uid, v]) => [uid, Math.round(parseFloat(v) * 100)]))
+      : undefined;
+
+    const percentages = expenseSplitType === "PERCENTAGE"
+      ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
+      : undefined;
+
+    // FIX 4: include shareUnits when split type is SHARES
+    const shareUnits = expenseSplitType === "SHARES"
+      ? Object.fromEntries(
+          Object.entries(shareInputs)
+            .filter(([, v]) => v)
+            .map(([uid, v]) => [uid, parseInt(v)])
+        )
+      : undefined;
+
     const res = await fetch(`/api/groups/${id}/expenses`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description, amountPaise, paidById, confirmDuplicate }),
+      body: JSON.stringify({
+        description,
+        amountPaise,
+        paidById,
+        splitType: expenseSplitType,
+        exactAmounts,
+        percentages,
+        shareUnits,
+        confirmDuplicate,
+      }),
     });
 
     if (res.status === 409) {
       const data = await res.json();
       setWarning(data.message);
+      return;
+    }
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error || "Failed to add expense");
       return;
     }
 
@@ -61,18 +153,20 @@ export default function GroupDetailPage() {
       return;
     }
     setMemberEmail("");
-    loadGroup(); // refresh member list so the dropdown updates immediately
+    loadGroup();
   }
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
       <h1>Group</h1>
 
-<Link href={`/groups/${id}/balances`}>View balances</Link>
-{" | "}
-<Link href={`/groups/${id}/settle`}>Settle up</Link>
+      {/* FIX 3: proper separators between all links */}
+      <Link href={`/groups/${id}/balances`}>View balances</Link>
+      {" | "}
+      <Link href={`/groups/${id}/settle`}>Settle up</Link>
+      {" | "}
+      <Link href={`/groups/${id}/recurring`}>Recurring expenses</Link>
 
-<Link href={`/groups/${id}/recurring`}>Recurring expenses</Link>
       <h2>Members</h2>
       <ul>
         {members.map((m) => (
@@ -87,10 +181,51 @@ export default function GroupDetailPage() {
       <button onClick={addMember} disabled={!memberEmail}>Add member</button>
       {memberError && <p style={{ color: "red" }}>{memberError}</p>}
 
-      <h2>Add expense</h2>
-      <input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
-      <input placeholder="Amount (₹)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+      <button onClick={generateInvite}>Generate invite link</button>
+      {inviteLink && (
+        <div style={{ marginTop: 8 }}>
+          <input value={inviteLink} readOnly style={{ width: "100%" }} />
+          <button onClick={() => navigator.clipboard.writeText(inviteLink)}>Copy link</button>
+          <p style={{ fontSize: 12, color: "#888" }}>
+            Share this link — anyone with it can join. Valid 7 days.
+          </p>
+        </div>
+      )}
 
+      <button onClick={() => setShowPlaceholder(!showPlaceholder)}>Add placeholder member</button>
+      {showPlaceholder && (
+        <div>
+          <input
+            placeholder="Name (required)"
+            value={placeholderName}
+            onChange={(e) => setPlaceholderName(e.target.value)}
+          />
+          <input
+            placeholder="Phone (optional)"
+            value={placeholderPhone}
+            onChange={(e) => setPlaceholderPhone(e.target.value)}
+          />
+          <button onClick={addPlaceholder} disabled={!placeholderName}>Add placeholder</button>
+          <p style={{ fontSize: 12, color: "#888" }}>
+            Placeholder members can be included in splits but can't log in.
+            Useful for friends on trips who don't want to sign up.
+          </p>
+        </div>
+      )}
+
+      {/* FIX 2: split type selector is now INSIDE the add-expense section, above the Add button */}
+      <h2>Add expense</h2>
+      <input
+        placeholder="Description"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+      />
+      <input
+        placeholder="Amount (₹)"
+        type="number"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+      />
       <select value={paidById} onChange={(e) => setPaidById(e.target.value)}>
         {members.map((m) => (
           <option key={m.userId} value={m.userId}>
@@ -99,6 +234,65 @@ export default function GroupDetailPage() {
         ))}
       </select>
 
+      <select value={expenseSplitType} onChange={(e) => setExpenseSplitType(e.target.value)}>
+        <option value="EQUAL">Split equally</option>
+        <option value="EXACT">Exact amounts</option>
+        <option value="PERCENTAGE">By percentage</option>
+        <option value="SHARES">By shares</option>
+      </select>
+
+      {expenseSplitType === "EXACT" && (
+        <div>
+          <p style={{ fontSize: 12, color: "#888" }}>Enter how much each person owes exactly:</p>
+          {members.map((m) => (
+            <div key={m.userId}>
+              <label>{m.user.name || m.user.email}: ₹</label>
+              <input
+                type="number"
+                placeholder="0"
+                value={exactInputs[m.userId] || ""}
+                onChange={(e) => setExactInputs({ ...exactInputs, [m.userId]: e.target.value })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {expenseSplitType === "PERCENTAGE" && (
+        <div>
+          <p style={{ fontSize: 12, color: "#888" }}>Enter what % each person owes (must total 100%):</p>
+          {members.map((m) => (
+            <div key={m.userId}>
+              <label>{m.user.name || m.user.email}: </label>
+              <input
+                type="number"
+                placeholder="0"
+                value={percentInputs[m.userId] || ""}
+                onChange={(e) => setPercentInputs({ ...percentInputs, [m.userId]: e.target.value })}
+              />
+              <span>%</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {expenseSplitType === "SHARES" && (
+        <div>
+          <p style={{ fontSize: 12, color: "#888" }}>Enter each person's share units (e.g. meals eaten):</p>
+          {members.map((m) => (
+            <div key={m.userId}>
+              <label>{m.user.name || m.user.email}: </label>
+              <input
+                type="number"
+                placeholder="0"
+                value={shareInputs[m.userId] || ""}
+                onChange={(e) => setShareInputs({ ...shareInputs, [m.userId]: e.target.value })}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       <button onClick={() => addExpense(false)}>Add</button>
 
       {warning && (
@@ -106,11 +300,46 @@ export default function GroupDetailPage() {
           {warning} <button onClick={() => addExpense(true)}>Add anyway</button>
         </div>
       )}
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
       <h2>Expenses</h2>
       <ul>
         {expenses.map((e) => (
-          <li key={e.id}>{e.description} — ₹{(e.amountPaise / 100).toFixed(2)}</li>
+          <li key={e.id}>
+            {editingExpense === e.id ? (
+              <div>
+                <input value={editDesc} onChange={(ev) => setEditDesc(ev.target.value)} />
+                <input
+                  type="number"
+                  value={editAmount}
+                  onChange={(ev) => setEditAmount(ev.target.value)}
+                />
+                <select
+                  value={editPaidById}
+                  onChange={(ev) => setEditPaidById(ev.target.value)}
+                >
+                  {members.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.user.name || m.user.email}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={() => saveEditExpense(e.id)}>Save</button>
+                <button onClick={() => setEditingExpense(null)}>Cancel</button>
+              </div>
+            ) : (
+              <div>
+                {e.description} — ₹{(e.amountPaise / 100).toFixed(2)}
+                <button onClick={() => {
+                  setEditingExpense(e.id);
+                  setEditDesc(e.description);
+                  setEditAmount((e.amountPaise / 100).toString());
+                  setEditPaidById(e.paidById);
+                }}>Edit</button>
+                <button onClick={() => deleteExpense(e.id)}>Delete</button>
+              </div>
+            )}
+          </li>
         ))}
       </ul>
     </div>

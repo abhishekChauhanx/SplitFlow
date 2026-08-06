@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { description, amountPaise, paidById, confirmDuplicate } = await req.json();
+  const { description, amountPaise, paidById, splitType, exactAmounts, percentages, shareUnits, confirmDuplicate } = await req.json();
 
   if (!confirmDuplicate) {
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
@@ -32,7 +32,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const members = await prisma.groupMember.findMany({ where: { groupId: id } });
   const memberIds = members.map((m) => m.userId);
-  const splits = splitEqual(amountPaise, memberIds, paidById);
+
+  let splits;
+  try {
+    if (splitType === "EXACT") {
+      splits = splitExact(amountPaise, exactAmounts);
+    } else if (splitType === "PERCENTAGE") {
+      splits = splitByPercentage(amountPaise, percentages, paidById);
+    } else if (splitType === "SHARES") {
+      splits = splitByShares(amountPaise, shareUnits, paidById);
+    } else {
+      splits = splitEqual(amountPaise, memberIds, paidById);
+    }
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 400 });
+  }
 
   const expense = await prisma.expense.create({
     data: {
@@ -40,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       description,
       amountPaise,
       paidById,
-      splitType: "EQUAL",
+      splitType: splitType || "EQUAL",
       splits: { create: splits },
     },
     include: { splits: true },

@@ -29,24 +29,29 @@ export default function LoginPage() {
     }
   }
 
-  async function handleVerifyOtp() {
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/verify-otp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp }),
-      });
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      router.push(data.redirectTo);
-    } catch {
-      setError("That code didn't match. Try again.");
-    } finally {
-      setLoading(false);
-    }
+ async function handleVerifyOtp() {
+  setError(null);
+  setLoading(true);
+  try {
+    const res = await fetch("/api/auth/verify-otp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+
+    // Check if there's a "from" redirect param (e.g. came from an invite link)
+    const searchParams = new URLSearchParams(window.location.search);
+    const from = searchParams.get("from");
+
+    router.push(from || data.redirectTo);
+  } catch {
+    setError("That code didn't match. Try again.");
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div style={{ maxWidth: 360, margin: "80px auto", padding: "0 16px" }}>

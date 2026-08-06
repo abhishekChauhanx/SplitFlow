@@ -17,11 +17,17 @@ export async function proxy(req: NextRequest) {
     }
   }
 
+  // Already logged in → skip login page
   if (pathname === "/login" && isValidSession) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  if (!isValidSession) {
+  // Public paths — don't require login
+  const isPublic =
+    pathname === "/login" ||
+    pathname.startsWith("/join/"); // invite pages are public
+
+  if (!isPublic && !isValidSession) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("from", pathname);
     return NextResponse.redirect(loginUrl);
@@ -31,5 +37,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|login).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
