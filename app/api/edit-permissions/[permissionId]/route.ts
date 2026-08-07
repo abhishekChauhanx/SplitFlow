@@ -1,0 +1,28 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getSessionUserId } from "@/lib/session";
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ permissionId: string }> }
+) {
+  const { permissionId } = await params;
+  const userId = await getSessionUserId();
+  if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const permission = await prisma.editPermission.findUnique({ where: { id: permissionId } });
+  if (!permission) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Only the expense owner can approve/deny
+  if (permission.ownerId !== userId) {
+    return NextResponse.json({ error: "Only the expense creator can approve this" }, { status: 403 });
+  }
+
+  const { decision } = await req.json(); // "approved" or "denied"
+  const updated = await prisma.editPermission.update({
+    where: { id: permissionId },
+    data: { status: decision },
+  });
+
+  return NextResponse.json(updated);
+}

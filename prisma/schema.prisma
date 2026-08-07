@@ -8,7 +8,7 @@ datasource db {
 
 model User {
   id            String        @id @default(cuid())
-  email         String?       @unique  // <- add the ? to make it optional
+  email         String?       @unique
   name          String?
   phone         String?
   upiId         String?
@@ -18,6 +18,8 @@ model User {
   groups        GroupMember[]
   expensesPaid  Expense[]     @relation("PaidBy")
   splits        ExpenseSplit[]
+  editPermissionsRequested EditPermission[] @relation("RequestedPermissions")
+  editPermissionsOwned     EditPermission[] @relation("OwnedPermissions")
 }
 
 model GroupInvite {
@@ -44,12 +46,13 @@ model Expense {
   group       Group          @relation(fields: [groupId], references: [id])
   groupId     String
   description String
-  amountPaise Int            // store money as integer paise to avoid float rounding issues
+  amountPaise Int
   paidBy      User           @relation("PaidBy", fields: [paidById], references: [id])
   paidById    String
   splitType   SplitType
   createdAt   DateTime       @default(now())
   splits      ExpenseSplit[]
+  editPermissions EditPermission[]
 }
 
 model ExpenseSplit {
@@ -112,4 +115,17 @@ model RecurringTemplate {
   nextRunAt     DateTime
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
+}
+
+model EditPermission {
+  id            String   @id @default(cuid())
+  expenseId     String
+  expense       Expense  @relation(fields: [expenseId], references: [id])
+  requestedById String
+  requestedBy   User     @relation("RequestedPermissions", fields: [requestedById], references: [id])
+  ownerId       String
+  owner         User     @relation("OwnedPermissions", fields: [ownerId], references: [id])
+  action        String
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
 }

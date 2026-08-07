@@ -14,6 +14,24 @@ export async function PATCH(
   const expense = await prisma.expense.findUnique({ where: { id: expenseId } });
   if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Permission check: owner can edit freely, others need an approved permission
+  if (expense.paidById !== userId) {
+    const permission = await prisma.editPermission.findFirst({
+      where: {
+        expenseId,
+        requestedById: userId,
+        status: "approved",
+        action: "edit",
+      },
+    });
+    if (!permission) {
+      return NextResponse.json(
+        { error: "permission_required", message: "You need permission from the expense creator to do this" },
+        { status: 403 }
+      );
+    }
+  }
+
   const confirmedSettlement = await prisma.settlement.findFirst({
     where: { groupId: expense.groupId, status: "both_confirmed" },
   });
@@ -36,6 +54,15 @@ export async function PATCH(
     include: { splits: true },
   });
 
+  // Once the requester's edit is used, close out that approved permission
+  // so a stale "approved" row doesn't silently grant future edits forever.
+  if (expense.paidById !== userId) {
+    await prisma.editPermission.updateMany({
+      where: { expenseId, requestedById: userId, status: "approved", action: "edit" },
+      data: { status: "used" },
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -50,6 +77,24 @@ export async function DELETE(
   const expense = await prisma.expense.findUnique({ where: { id: expenseId } });
   if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  // Permission check: owner can delete freely, others need an approved permission
+  if (expense.paidById !== userId) {
+    const permission = await prisma.editPermission.findFirst({
+      where: {
+        expenseId,
+        requestedById: userId,
+        status: "approved",
+        action: "delete",
+      },
+    });
+    if (!permission) {
+      return NextResponse.json(
+        { error: "permission_required", message: "You need permission from the expense creator to do this" },
+        { status: 403 }
+      );
+    }
+  }
+
   const confirmedSettlement = await prisma.settlement.findFirst({
     where: { groupId: expense.groupId, status: "both_confirmed" },
   });
@@ -61,6 +106,7 @@ export async function DELETE(
   }
 
   await prisma.expenseSplit.deleteMany({ where: { expenseId } });
+  await prisma.editPermission.deleteMany({ where: { expenseId } });
   await prisma.expense.delete({ where: { id: expenseId } });
   return NextResponse.json({ ok: true });
 }

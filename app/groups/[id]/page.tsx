@@ -12,7 +12,7 @@ export default function GroupDetailPage() {
   const [amount, setAmount] = useState("");
   const [paidById, setPaidById] = useState("");
   const [warning, setWarning] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null); // FIX 1: was missing
+  const [error, setError] = useState<string | null>(null);
   const [memberEmail, setMemberEmail] = useState("");
   const [memberError, setMemberError] = useState<string | null>(null);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
@@ -26,8 +26,9 @@ export default function GroupDetailPage() {
   const [expenseSplitType, setExpenseSplitType] = useState("EQUAL");
   const [exactInputs, setExactInputs] = useState<Record<string, string>>({});
   const [percentInputs, setPercentInputs] = useState<Record<string, string>>({});
-  const [shareInputs, setShareInputs] = useState<Record<string, string>>({}); // FIX 4: was missing
+  const [shareInputs, setShareInputs] = useState<Record<string, string>>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
   function loadGroup() {
     fetch(`/api/groups/${id}`).then((r) => r.json()).then((group) => {
@@ -37,11 +38,22 @@ export default function GroupDetailPage() {
     });
   }
 
+  async function loadPendingRequests() {
+    const res = await fetch("/api/edit-permissions/pending");
+    if (res.ok) setPendingRequests(await res.json());
+  }
+
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
     fetch(`/api/groups/${id}/expenses`).then((r) => r.json()).then(setExpenses);
     loadGroup();
   }, [id]);
+
+  useEffect(() => {
+    loadPendingRequests();
+    const interval = setInterval(loadPendingRequests, 10000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function deleteExpense(expenseId: string) {
     if (!confirm("Delete this expense? Balances will recalculate.")) return;
@@ -100,7 +112,6 @@ export default function GroupDetailPage() {
       ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
       : undefined;
 
-    // FIX 4: include shareUnits when split type is SHARES
     const shareUnits = expenseSplitType === "SHARES"
       ? Object.fromEntries(
         Object.entries(shareInputs)
@@ -158,11 +169,39 @@ export default function GroupDetailPage() {
     loadGroup();
   }
 
+  async function requestEditPermission(expenseId: string, action: string) {
+    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}/request-edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const data = await res.json();
+    if (data.approved) {
+      // Already approved — proceed with edit
+      setEditingExpense(expenseId);
+    } else {
+      alert("Permission request sent to the expense creator. You can edit once they approve.");
+    }
+  }
+
+  async function respondToRequest(permissionId: string, decision: "approved" | "denied") {
+    const res = await fetch(`/api/edit-permissions/${permissionId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      alert(d.error || "Failed to respond");
+      return;
+    }
+    loadPendingRequests();
+  }
+
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
       <h1>Group</h1>
 
-      {/* FIX 3: proper separators between all links */}
       <Link href={`/groups/${id}/balances`}>View balances</Link>
       {" | "}
       <Link href={`/groups/${id}/settle`}>Settle up</Link>
@@ -220,7 +259,6 @@ export default function GroupDetailPage() {
         </div>
       )}
 
-      {/* FIX 2: split type selector is now INSIDE the add-expense section, above the Add button */}
       <h2>Add expense</h2>
       <input
         placeholder="Description"
@@ -310,6 +348,24 @@ export default function GroupDetailPage() {
       )}
       {error && <p style={{ color: "red" }}>{error}</p>}
 
+      {pendingRequests.length > 0 && (
+        <div style={{ border: "1px solid #444", padding: 12, marginTop: 16 }}>
+          <h3>Pending permission requests</h3>
+          {pendingRequests.map((req) => (
+            <div key={req.id} style={{ marginBottom: 8 }}>
+              {req.requestedBy.name || req.requestedBy.email} wants to {req.action}{" "}
+              "{req.expense.description}"
+              <button onClick={() => respondToRequest(req.id, "approved")} style={{ marginLeft: 8 }}>
+                Approve
+              </button>
+              <button onClick={() => respondToRequest(req.id, "denied")} style={{ marginLeft: 4 }}>
+                Deny
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <h2>Expenses</h2>
       <ul>
         {expenses.map((e) => (
@@ -338,13 +394,23 @@ export default function GroupDetailPage() {
             ) : (
               <div>
                 {e.description} — ₹{(e.amountPaise / 100).toFixed(2)}
-                <button onClick={() => {
-                  setEditingExpense(e.id);
-                  setEditDesc(e.description);
-                  setEditAmount((e.amountPaise / 100).toString());
-                  setEditPaidById(e.paidById);
-                }}>Edit</button>
-                <button onClick={() => deleteExpense(e.id)}>Delete</button>
+                {e.paidById === currentUserId ? (
+                  // Owner — can edit/delete freely
+                  <>
+                    <button onClick={() => {
+                      setEditingExpense(e.id);
+                      setEditDesc(e.description);
+                      setEditAmount((e.amountPaise / 100).toString());
+                      setEditPaidById(e.paidById);
+                    }}>Edit</button>
+                    <button onClick={() => deleteExpense(e.id)}>Delete</button>
+                  </>
+                ) : (
+                  // Not owner — must request permission
+                  <button onClick={() => requestEditPermission(e.id, "edit")}>
+                    Request edit permission
+                  </button>
+                )}
               </div>
             )}
           </li>
