@@ -11,7 +11,7 @@ export default function SettlePage() {
   const [partialAmounts, setPartialAmounts] = useState<Record<number, string>>({});
   const [history, setHistory] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
+  const [paymentMethods, setPaymentMethods] = useState<Record<number, string>>({});
   async function generateQr(index: number, s: any, amountPaiseOverride?: number) {
     if (!s.toUpiId) return;
     const amountPaise = amountPaiseOverride ?? s.amountPaise;
@@ -47,10 +47,12 @@ export default function SettlePage() {
       ? Math.round(parseFloat(partialAmounts[index]) * 100)
       : s.amountPaise;
 
+    const paymentMethod = paymentMethods[index] || "upi";
+
     const res = await fetch(`/api/groups/${id}/settlements`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ toUserId: s.toUserId, amountPaise: amountToSend }),
+      body: JSON.stringify({ toUserId: s.toUserId, amountPaise: amountToSend, paymentMethod }),
     });
 
     if (!res.ok) {
@@ -59,7 +61,10 @@ export default function SettlePage() {
       return;
     }
 
-    alert("Settlement recorded — both sides need to confirm below once payment is made.");
+    alert(paymentMethod === "cash"
+      ? "Cash payment recorded — ask the recipient to confirm they received it."
+      : "UPI payment recorded — both sides need to confirm below."
+    );
     loadHistory();
   }
 
@@ -101,7 +106,20 @@ export default function SettlePage() {
                 <img src={qrCodes[i]} alt="UPI QR code" width={160} height={160} />
               </>
             )}
-
+            {isPayer && (
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ fontSize: 12, color: "#888", marginRight: 8 }}>
+                  How are you paying?
+                </label>
+                <select
+                  value={paymentMethods[i] || "upi"}
+                  onChange={(e) => setPaymentMethods({ ...paymentMethods, [i]: e.target.value })}
+                >
+                  <option value="upi">UPI (scan QR or use link)</option>
+                  <option value="cash">Cash (in person)</option>
+                </select>
+              </div>
+            )}
             {isPayer ? (
               <div>
                 <input

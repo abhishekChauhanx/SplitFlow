@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { toUserId, amountPaise } = await req.json();
+  const { toUserId, amountPaise ,paymentMethod  } = await req.json();
 
   if (userId === toUserId) {
     return NextResponse.json({ error: "You can't record a payment to yourself" }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       fromUserId: userId, // the logged-in person IS the payer, always
       toUserId,
       amountPaise,
+      paymentMethod: paymentMethod || "upi",
       status: "pending",
     },
   });

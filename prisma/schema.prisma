@@ -96,6 +96,8 @@ model Settlement {
   toUserId          String
   amountPaise       Int
   status            String    @default("pending") // pending | payer_confirmed | both_confirmed | disputed
+  paymentMethod    String    @default("upi") // "upi" | "cash"
+  utrNumber        String?
   payerConfirmedAt  DateTime?
   payeeConfirmedAt  DateTime?
   disputeReason     String?
