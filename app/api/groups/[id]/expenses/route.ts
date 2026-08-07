@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
-import { splitEqual } from "@/lib/split-logic";
+import { splitEqual, splitExact, splitByPercentage, splitByShares } from "@/lib/split-logic";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,15 +18,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { description, amountPaise, paidById, splitType, exactAmounts, percentages, shareUnits, confirmDuplicate } = await req.json();
+  const {
+    description,
+    amountPaise,
+    paidById,
+    splitType,
+    exactAmounts,
+    percentages,
+    shareUnits,
+    confirmDuplicate,
+  } = await req.json();
 
+  // Duplicate detection
   if (!confirmDuplicate) {
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
     const possibleDuplicate = await prisma.expense.findFirst({
-      where: { groupId: id, amountPaise, paidById, description, createdAt: { gte: twoMinAgo } },
+      where: {
+        groupId: id,
+        amountPaise,
+        paidById,
+        description,
+        createdAt: { gte: twoMinAgo },
+      },
     });
     if (possibleDuplicate) {
-      return NextResponse.json({ warning: "duplicate", message: "A very similar expense was just added. Add anyway?" }, { status: 409 });
+      return NextResponse.json(
+        { warning: "duplicate", message: "A very similar expense was just added. Add anyway?" },
+        { status: 409 }
+      );
     }
   }
 

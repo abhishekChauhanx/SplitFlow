@@ -7,17 +7,17 @@ datasource db {
 }
 
 model User {
-  id        String        @id @default(cuid())
-  email     String        @unique
-  name      String?
-  phone     String?
-  upiId     String?
-  isPlaceholder Boolean     @default(false)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  groups    GroupMember[]
-  expensesPaid Expense[]      @relation("PaidBy")
-  splits       ExpenseSplit[]
+  id            String        @id @default(cuid())
+  email         String?       @unique  // <- add the ? to make it optional
+  name          String?
+  phone         String?
+  upiId         String?
+  isPlaceholder Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  groups        GroupMember[]
+  expensesPaid  Expense[]     @relation("PaidBy")
+  splits        ExpenseSplit[]
 }
 
 model GroupInvite {
