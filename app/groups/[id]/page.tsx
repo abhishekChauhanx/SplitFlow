@@ -27,6 +27,7 @@ export default function GroupDetailPage() {
   const [exactInputs, setExactInputs] = useState<Record<string, string>>({});
   const [percentInputs, setPercentInputs] = useState<Record<string, string>>({});
   const [shareInputs, setShareInputs] = useState<Record<string, string>>({}); // FIX 4: was missing
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   function loadGroup() {
     fetch(`/api/groups/${id}`).then((r) => r.json()).then((group) => {
@@ -37,6 +38,7 @@ export default function GroupDetailPage() {
   }
 
   useEffect(() => {
+    fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
     fetch(`/api/groups/${id}/expenses`).then((r) => r.json()).then(setExpenses);
     loadGroup();
   }, [id]);
@@ -101,10 +103,10 @@ export default function GroupDetailPage() {
     // FIX 4: include shareUnits when split type is SHARES
     const shareUnits = expenseSplitType === "SHARES"
       ? Object.fromEntries(
-          Object.entries(shareInputs)
-            .filter(([, v]) => v)
-            .map(([uid, v]) => [uid, parseInt(v)])
-        )
+        Object.entries(shareInputs)
+          .filter(([, v]) => v)
+          .map(([uid, v]) => [uid, parseInt(v)])
+      )
       : undefined;
 
     const res = await fetch(`/api/groups/${id}/expenses`, {
@@ -170,7 +172,12 @@ export default function GroupDetailPage() {
       <h2>Members</h2>
       <ul>
         {members.map((m) => (
-          <li key={m.userId}>{m.user.name || m.user.email}</li>
+          <li key={m.userId}>
+            {m.user.name || m.user.email}
+            {m.userId === currentUserId && (
+              <span style={{ color: "#888", fontSize: 12, marginLeft: 6 }}>(me)</span>
+            )}
+          </li>
         ))}
       </ul>
       <input
@@ -230,6 +237,7 @@ export default function GroupDetailPage() {
         {members.map((m) => (
           <option key={m.userId} value={m.userId}>
             {m.user.name || m.user.email}
+            {m.userId === currentUserId ? " (me)" : ""}
           </option>
         ))}
       </select>

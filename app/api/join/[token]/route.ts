@@ -21,19 +21,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const userId = await getSessionUserId();
 
   if (!userId) {
-    return NextResponse.json(
-      { error: "not_authenticated", message: "Please log in first" },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
-  // Verify this userId actually exists in the database
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) {
-    return NextResponse.json(
-      { error: "not_authenticated", message: "Session expired — please log in again" },
-      { status: 401 }
-    );
+    return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
   }
 
   const invite = await prisma.groupInvite.findUnique({
@@ -45,15 +38,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (invite.usedAt) return NextResponse.json({ error: "This invite has already been used" }, { status: 410 });
   if (new Date() > invite.expiresAt) return NextResponse.json({ error: "This invite has expired" }, { status: 410 });
 
+  // Already a member — return 409 with the groupId so we can redirect them
   const existing = await prisma.groupMember.findUnique({
     where: { groupId_userId: { groupId: invite.groupId, userId } },
   });
 
-  if (!existing) {
-    await prisma.groupMember.create({
-      data: { groupId: invite.groupId, userId },
-    });
+  if (existing) {
+    return NextResponse.json(
+      { error: "already_member", groupId: invite.groupId },
+      { status: 409 }
+    );
   }
+
+  await prisma.groupMember.create({
+    data: { groupId: invite.groupId, userId },
+  });
 
   await prisma.groupInvite.update({
     where: { token },

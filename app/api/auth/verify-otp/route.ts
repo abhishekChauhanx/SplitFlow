@@ -4,7 +4,7 @@ import { checkOtp } from "@/lib/otp-store";
 import { createSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
-  const { email, otp } = await req.json();
+  const { email, otp, from } = await req.json();
 
   const isValid = await checkOtp(email, otp);
   if (!isValid) {
@@ -12,16 +12,29 @@ export async function POST(req: NextRequest) {
   }
 
   let user = await prisma.user.findUnique({ where: { email } });
+  const isNewUser = !user;
 
   if (!user) {
-    // Brand new email — never seen before
     user = await prisma.user.create({ data: { email } });
-    await createSession(user.id);
+  }
+
+  await createSession(user.id);
+
+  // New user coming from an invite link
+  // → go to onboarding first, then back to join page after
+  if (isNewUser && from) {
+    return NextResponse.json({ redirectTo: `/onboarding?next=${encodeURIComponent(from)}` });
+  }
+
+  // Existing user coming from an invite link → skip onboarding, go back to join page
+  if (from) {
+    return NextResponse.json({ redirectTo: from });
+  }
+
+  // Normal flow
+  if (!user.name) {
     return NextResponse.json({ redirectTo: "/onboarding" });
   }
 
-  // Email already exists in the DB — skip onboarding entirely, even if
-  // name/phone were never filled in
-  await createSession(user.id);
   return NextResponse.json({ redirectTo: "/dashboard" });
 }
