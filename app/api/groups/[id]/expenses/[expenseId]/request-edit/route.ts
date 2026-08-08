@@ -10,31 +10,41 @@ export async function POST(
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
+  const { action } = await req.json();
+  const requestedAction = action || "edit";
+
   const expense = await prisma.expense.findUnique({
     where: { id: expenseId },
-    include: { paidBy: true },
+    include: { createdBy: true },
   });
   if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // If you created (paid for) the expense, no permission needed
-  if (expense.paidById === userId) {
+  // Ownership now keyed on createdById, not paidById — see PATCH/DELETE route comment
+  if (expense.createdById === userId) {
     return NextResponse.json({ approved: true, reason: "owner" });
   }
 
-  // Check if there's already an approved permission
-  const existing = await prisma.editPermission.findFirst({
-    where: { expenseId, requestedById: userId, status: "approved" },
+  const approved = await prisma.editPermission.findFirst({
+    where: { expenseId, requestedById: userId, status: "approved", action: requestedAction },
   });
-  if (existing) return NextResponse.json({ approved: true, reason: "already_approved" });
+  if (approved) {
+    return NextResponse.json({ approved: true, reason: "already_approved", permissionId: approved.id });
+  }
 
-  // Create a pending permission request
+  const pending = await prisma.editPermission.findFirst({
+    where: { expenseId, requestedById: userId, status: "pending", action: requestedAction },
+  });
+  if (pending) {
+    return NextResponse.json({ approved: false, permissionId: pending.id, status: "pending", reason: "already_pending" });
+  }
+
   const permission = await prisma.editPermission.create({
     data: {
       expenseId,
       requestedById: userId,
-      ownerId: expense.paidById,
+      ownerId: expense.createdById,
       status: "pending",
-      action: (await req.json()).action || "edit", // "edit" or "delete"
+      action: requestedAction,
     },
   });
 

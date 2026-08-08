@@ -20,6 +20,8 @@ model User {
   splits        ExpenseSplit[]
   editPermissionsRequested EditPermission[] @relation("RequestedPermissions")
   editPermissionsOwned     EditPermission[] @relation("OwnedPermissions")
+  createdExpensesOwned     Expense[]        @relation("CreatedExpenses")
+  expensePayments          ExpensePayment[] @relation("ExpensePayments")
 }
 
 model GroupInvite {
@@ -42,17 +44,32 @@ model Group {
 }
 
 model Expense {
-  id          String         @id @default(cuid())
-  group       Group          @relation(fields: [groupId], references: [id])
-  groupId     String
-  description String
-  amountPaise Int
-  paidBy      User           @relation("PaidBy", fields: [paidById], references: [id])
-  paidById    String
-  splitType   SplitType
-  createdAt   DateTime       @default(now())
-  splits      ExpenseSplit[]
+  id              String           @id @default(cuid())
+  group           Group            @relation(fields: [groupId], references: [id])
+  groupId         String
+  description     String
+  amountPaise     Int
+  paidBy          User             @relation("PaidBy", fields: [paidById], references: [id])
+  paidById        String
+  createdBy       User             @relation("CreatedExpenses", fields: [createdById], references: [id])   // NEW
+  createdById     String                                                                                     // NEW
+  splitType       SplitType
+  createdAt       DateTime         @default(now())
+  splits          ExpenseSplit[]
   editPermissions EditPermission[]
+  payments        ExpensePayment[]                                                                           // NEW
+}
+
+model ExpensePayment {
+  id          String   @id @default(cuid())
+  expenseId   String
+  expense     Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation("ExpensePayments", fields: [userId], references: [id])
+  amountPaise Int
+  createdAt   DateTime @default(now())
+
+  @@unique([expenseId, userId]) // one row per contributor per expense; merges increment it
 }
 
 model ExpenseSplit {

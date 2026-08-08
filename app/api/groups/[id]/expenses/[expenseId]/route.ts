@@ -14,8 +14,10 @@ export async function PATCH(
   const expense = await prisma.expense.findUnique({ where: { id: expenseId } });
   if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Permission check: owner can edit freely, others need an approved permission
-  if (expense.paidById !== userId) {
+  // Ownership: the ORIGINAL CREATOR can edit freely, others need an approved permission.
+  // (paidById can now shift to whoever paid most recently after a merge, so it's no
+  // longer a reliable "owner" signal — createdById is fixed at creation forever.)
+  if (expense.createdById !== userId) {
     const permission = await prisma.editPermission.findFirst({
       where: {
         expenseId,
@@ -48,15 +50,22 @@ export async function PATCH(
   const splits = splitEqual(amountPaise, memberIds, paidById);
 
   await prisma.expenseSplit.deleteMany({ where: { expenseId } });
+  // Manual edits reset to a single payer — clear multi-payer history so the
+  // payments table doesn't disagree with the new amountPaise/paidById.
+  await prisma.expensePayment.deleteMany({ where: { expenseId } });
   const updated = await prisma.expense.update({
     where: { id: expenseId },
-    data: { description, amountPaise, paidById, splits: { create: splits } },
-    include: { splits: true },
+    data: {
+      description,
+      amountPaise,
+      paidById,
+      splits: { create: splits },
+      payments: { create: [{ userId: paidById, amountPaise }] },
+    },
+    include: { splits: true, payments: true },
   });
 
-  // Once the requester's edit is used, close out that approved permission
-  // so a stale "approved" row doesn't silently grant future edits forever.
-  if (expense.paidById !== userId) {
+  if (expense.createdById !== userId) {
     await prisma.editPermission.updateMany({
       where: { expenseId, requestedById: userId, status: "approved", action: "edit" },
       data: { status: "used" },
@@ -77,8 +86,7 @@ export async function DELETE(
   const expense = await prisma.expense.findUnique({ where: { id: expenseId } });
   if (!expense) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Permission check: owner can delete freely, others need an approved permission
-  if (expense.paidById !== userId) {
+  if (expense.createdById !== userId) {
     const permission = await prisma.editPermission.findFirst({
       where: {
         expenseId,
@@ -106,6 +114,7 @@ export async function DELETE(
   }
 
   await prisma.expenseSplit.deleteMany({ where: { expenseId } });
+  await prisma.expensePayment.deleteMany({ where: { expenseId } });
   await prisma.editPermission.deleteMany({ where: { expenseId } });
   await prisma.expense.delete({ where: { id: expenseId } });
   return NextResponse.json({ ok: true });

@@ -226,7 +226,9 @@ export default function GroupDetailPage() {
     loadGroup();
   }
 
-  async function addExpense(confirmDuplicate = false) {
+  const [mergeInfo, setMergeInfo] = useState<any | null>(null);
+
+  async function addExpense(confirmDuplicate = false, confirmMerge = false) {
     setError(null);
     const amountPaise = Math.round(parseFloat(amount) * 100);
 
@@ -249,12 +251,18 @@ export default function GroupDetailPage() {
     const res = await fetch(`/api/groups/${id}/expenses`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate }),
+      body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate, confirmMerge }),
     });
 
     if (res.status === 409) {
       const data = await res.json();
-      setWarning(data.message);
+      if (data.mergeCandidate) {
+        setMergeInfo(data);
+        setWarning(null);
+      } else {
+        setWarning(data.message);
+        setMergeInfo(null);
+      }
       return;
     }
     if (!res.ok) {
@@ -264,10 +272,17 @@ export default function GroupDetailPage() {
     }
 
     const expense = await res.json();
-    setExpenses([expense, ...expenses]);
+    // A merge updates an EXISTING expense — replace it in place rather than prepending a duplicate row
+    setExpenses((prev) => {
+      const alreadyThere = prev.some((e) => e.id === expense.id);
+      return alreadyThere
+        ? prev.map((e) => (e.id === expense.id ? expense : e))
+        : [expense, ...prev];
+    });
     setDescription("");
     setAmount("");
     setWarning(null);
+    setMergeInfo(null);
   }
 
   async function addMember() {
@@ -425,10 +440,19 @@ export default function GroupDetailPage() {
         </div>
       )}
 
-      <button onClick={() => addExpense(false)}>Add</button>
+      <button onClick={() => addExpense(false, false)}>Add</button>
       {warning && (
         <div style={{ color: "orange" }}>
-          {warning} <button onClick={() => addExpense(true)}>Add anyway</button>
+          {warning} <button onClick={() => addExpense(true, false)}>Add anyway</button>
+        </div>
+      )}
+      {mergeInfo && (
+        <div style={{ border: "1px solid #f59e0b", background: "#1a1a0a", padding: 12, marginTop: 8, borderRadius: 6 }}>
+          <p style={{ margin: "0 0 8px", fontSize: 13 }}>{mergeInfo.message}</p>
+          <button onClick={() => addExpense(false, true)} style={{ marginRight: 8 }}>
+            Merge into existing
+          </button>
+          <button onClick={() => setMergeInfo(null)}>Cancel</button>
         </div>
       )}
       {error && <p style={{ color: "red" }}>{error}</p>}
@@ -436,7 +460,7 @@ export default function GroupDetailPage() {
       <h2>Expenses</h2>
       <ul>
         {expenses.map((e) => {
-          const isOwner = e.paidById === currentUserId;
+          const isOwner = e.createdById === currentUserId;
           const permStatus = myPermissions[e.id]; // undefined | "pending" | "approved" | "denied"
           const hasApproval = permStatus === "approved";
 
@@ -457,8 +481,17 @@ export default function GroupDetailPage() {
                 </div>
               ) : (
                 // ── Display row ──
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>{e.description} — ₹{(e.amountPaise / 100).toFixed(2)}</span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <span>{e.description} — ₹{(e.amountPaise / 100).toFixed(2)}</span>
+                    {e.payments && e.payments.length > 1 && (
+                      <p style={{ margin: "2px 0 0", fontSize: 11, color: "#888" }}>
+                        {e.payments
+                          .map((p: any) => `${p.user?.name || p.user?.email || "someone"}: ₹${(p.amountPaise / 100).toFixed(2)}`)
+                          .join(" · ")}
+                      </p>
+                    )}
+                  </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     {(isOwner || hasApproval) ? (
                       // Owner or approved — show Edit and Delete
