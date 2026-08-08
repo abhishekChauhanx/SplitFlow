@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import QRCode from "qrcode";
 import RefreshButton from "@/components/RefreshButton";
+import PageLoader from "@/components/PageLoader";
 
 export default function SettlePage() {
   const { id } = useParams();
@@ -14,6 +15,7 @@ export default function SettlePage() {
   const [history, setHistory] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<Record<number, string>>({});
+  const [initialLoading, setInitialLoading] = useState(true);
 
   async function generateQr(index: number, s: any, amountPaiseOverride?: number) {
     if (!s.toUpiId) return;
@@ -43,8 +45,7 @@ export default function SettlePage() {
 
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    loadSuggestions();
-    loadHistory();
+    Promise.all([loadSuggestions(), loadHistory()]).finally(() => setInitialLoading(false));
   }, [id, loadSuggestions, loadHistory]);
 
   function handlePartialChange(index: number, value: string, s: any) {
@@ -99,6 +100,8 @@ export default function SettlePage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+      {initialLoading && <PageLoader label="Loading settlement info" />}
+
       <Link href={`/groups/${id}`} style={{ fontSize: 14, color: "#888" }}>
         ← Back to group
       </Link>

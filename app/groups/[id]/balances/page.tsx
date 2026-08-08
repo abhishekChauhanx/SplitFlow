@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
+import PageLoader from "@/components/PageLoader";
 
 type Balance = {
   userId: string;
@@ -146,11 +147,7 @@ export default function BalancesPage() {
   if (loading) {
     return (
       <main className="min-h-screen bg-white text-gray-900">
-        <div className="mx-auto max-w-xl px-4 py-10">
-          <div className="rounded-xl border border-gray-200 p-5 text-sm text-gray-500">
-            Loading balances...
-          </div>
-        </div>
+        <PageLoader label="Loading balances" />
       </main>
     );
   }

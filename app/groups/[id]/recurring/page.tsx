@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
+import PageLoader from "@/components/PageLoader";
 
 export default function RecurringPage() {
   const { id } = useParams();
@@ -14,6 +15,7 @@ export default function RecurringPage() {
   const [splitType, setSplitType] = useState("EQUAL");
   const [frequencyDays, setFrequencyDays] = useState("30");
   const [shareInputs, setShareInputs] = useState<Record<string, string>>({});
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const loadTemplates = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/recurring`);
@@ -32,8 +34,7 @@ export default function RecurringPage() {
   }, [loadTemplates, loadMembers]);
 
   useEffect(() => {
-    loadTemplates();
-    loadMembers();
+    Promise.all([loadTemplates(), loadMembers()]).finally(() => setInitialLoading(false));
   }, [id, loadTemplates, loadMembers]);
 
   async function createTemplate() {
@@ -66,6 +67,8 @@ export default function RecurringPage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+      {initialLoading && <PageLoader label="Loading recurring expenses" />}
+
       <Link href={`/groups/${id}`} style={{ fontSize: 14, color: "#888" }}>
         ← Back to group
       </Link>

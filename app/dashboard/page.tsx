@@ -4,11 +4,17 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
+import Spinner from "@/components/Spinner";
+import PageLoader from "@/components/PageLoader";
+import { useModal } from "@/components/ModalProvider";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { confirm } = useModal();
   const [groups, setGroups] = useState<any[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   const loadGroups = useCallback(async () => {
     const res = await fetch("/api/groups");
@@ -17,7 +23,7 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    loadGroups();
+    loadGroups().finally(() => setInitialLoading(false));
   }, [loadGroups]);
 
   async function createGroup() {
@@ -29,18 +35,34 @@ export default function DashboardPage() {
       (g) => g.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
     if (duplicate) {
-      alert(`"${trimmedName}" group already exists — please try a different name.`);
+      await confirm({
+        title: "Group already exists",
+        message: `"${trimmedName}" group already exists — please try a different name.`,
+        mode: "alert",
+      });
       return;
     }
 
-    const res = await fetch("/api/groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: trimmedName }),
+    const ok = await confirm({
+      title: "Create group?",
+      message: `Are you sure you want to create the group "${trimmedName}"?`,
+      confirmLabel: "Create",
     });
-    const group = await res.json();
-    setGroups([...groups, group]);
-    setNewGroupName("");
+    if (!ok) return;
+
+    setCreatingGroup(true);
+    try {
+      const res = await fetch("/api/groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmedName }),
+      });
+      const group = await res.json();
+      setGroups([...groups, group]);
+      setNewGroupName("");
+    } finally {
+      setCreatingGroup(false);
+    }
   }
 
   async function handleLogout() {
@@ -50,6 +72,10 @@ export default function DashboardPage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+      {(initialLoading || creatingGroup) && (
+        <PageLoader label={creatingGroup ? "Creating group" : "Loading your groups"} />
+      )}
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ margin: 0 }}>Your groups</h1>
@@ -64,7 +90,9 @@ export default function DashboardPage() {
           value={newGroupName}
           onChange={(e) => setNewGroupName(e.target.value)}
         />
-        <button onClick={createGroup} disabled={!newGroupName}>Create</button>
+        <button onClick={createGroup} disabled={!newGroupName || creatingGroup}>
+          {creatingGroup ? <Spinner /> : "Create"}
+        </button>
       </div>
 
       <ul>

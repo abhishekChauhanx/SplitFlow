@@ -4,16 +4,20 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
+import Spinner from "@/components/Spinner";
+import PageLoader from "@/components/PageLoader";
+import { useModal } from "@/components/ModalProvider";
 
 export default function GroupDetailPage() {
   const { id } = useParams();
+  const { confirm } = useModal();
+  const [initialLoading, setInitialLoading] = useState(true);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [paidById, setPaidById] = useState("");
-  const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [memberEmail, setMemberEmail] = useState("");
   const [memberError, setMemberError] = useState<string | null>(null);
@@ -30,15 +34,22 @@ export default function GroupDetailPage() {
   const [percentInputs, setPercentInputs] = useState<Record<string, string>>({});
   const [shareInputs, setShareInputs] = useState<Record<string, string>>({});
 
+  // Loading states — one per listed action
+  const [addingMember, setAddingMember] = useState(false);
+  const [generatingInvite, setGeneratingInvite] = useState(false);
+  const [addingPlaceholder, setAddingPlaceholder] = useState(false);
+  const [addingExpense, setAddingExpense] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+  const [requestingPermissionId, setRequestingPermissionId] = useState<string | null>(null);
+
   // Permission system state
   const [pendingRequests, setPendingRequests] = useState<any[]>([]); // for owner
   const [myPermissions, setMyPermissions] = useState<Record<string, string>>({}); // expenseId -> status
   const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, string>>({}); // expenseId -> permissionId
 
-  // FIX: use a ref, not state, to track which permission IDs we've already alerted about.
-  // A ref's value is always current inside closures — it doesn't go stale the way
-  // state captured by a setInterval created once in useEffect does. That staleness
-  // was why the "approved" alert kept firing every poll instead of just once.
+  // Tracks which permission IDs we've already shown a modal for, so polling
+  // doesn't show the same "approved"/"denied" modal on every 8s tick.
   const notifiedPermissionsRef = useRef<Set<string>>(new Set());
 
   const loadGroup = useCallback(async () => {
@@ -54,18 +65,16 @@ export default function GroupDetailPage() {
     setExpenses(await res.json());
   }, [id]);
 
-  // Poll for pending requests (owner side — someone wants to edit MY expense)
   const loadPendingRequests = useCallback(() => {
-    fetch("/api/edit-permissions/pending")
+    return fetch("/api/edit-permissions/pending")
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setPendingRequests(data);
       });
   }, []);
 
-  // Poll for my own request statuses (requester side — did owner approve/deny?)
   const loadMyPermissions = useCallback(() => {
-    fetch("/api/edit-permissions/my-requests")
+    return fetch("/api/edit-permissions/my-requests")
       .then((r) => r.json())
       .then((data: any[]) => {
         if (!Array.isArray(data)) return;
@@ -74,28 +83,28 @@ export default function GroupDetailPage() {
         const idMap: Record<string, string> = {};
 
         data.forEach((p) => {
-          // FIX: if the expense this permission points to was deleted, the include
-          // comes back null. Skip it entirely instead of trying to read
-          // p.expense.description on a null value.
-          if (!p.expense) return;
+          if (!p.expense) return; // orphaned permission for a deleted expense
 
           map[p.expenseId] = p.status;
           idMap[p.expenseId] = p.id;
 
-          // Show alert ONCE when status changes to approved or denied
           if (
             (p.status === "approved" || p.status === "denied") &&
             !notifiedPermissionsRef.current.has(p.id)
           ) {
             notifiedPermissionsRef.current.add(p.id);
             if (p.status === "approved") {
-              alert(
-                `✅ Permission approved!\n\nYou can now edit or delete "${p.expense.description}".\n\nClick OK to see the Edit and Delete buttons.`
-              );
+              confirm({
+                title: "Permission approved",
+                message: `You can now edit or delete "${p.expense.description}".`,
+                mode: "alert",
+              });
             } else {
-              alert(
-                `❌ Permission denied.\n\nThe expense creator declined your request to edit "${p.expense.description}".`
-              );
+              confirm({
+                title: "Permission denied",
+                message: `The expense creator declined your request to edit "${p.expense.description}".`,
+                mode: "alert",
+              });
             }
           }
         });
@@ -103,16 +112,14 @@ export default function GroupDetailPage() {
         setMyPermissions(map);
         setPendingRequestIds(idMap);
       });
-  }, []); // FIX: no longer depends on notifiedPermissions state, so this function reference is stable
+  }, [confirm]);
 
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    loadExpenses();
-    loadGroup();
-    loadPendingRequests();
-    loadMyPermissions();
+    Promise.all([loadExpenses(), loadGroup(), loadPendingRequests(), loadMyPermissions()]).finally(() =>
+      setInitialLoading(false)
+    );
 
-    // Poll every 8 seconds for real-time updates, but only while the tab is visible
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
         loadPendingRequests();
@@ -123,12 +130,10 @@ export default function GroupDetailPage() {
     return () => clearInterval(interval);
   }, [id, loadExpenses, loadGroup, loadPendingRequests, loadMyPermissions]);
 
-  // Manual refresh: reloads everything this page depends on at once
   const refreshAll = useCallback(async () => {
     await Promise.all([loadExpenses(), loadGroup(), loadPendingRequests(), loadMyPermissions()]);
   }, [loadExpenses, loadGroup, loadPendingRequests, loadMyPermissions]);
 
-  // Owner responds to a request
   async function respondToRequest(permissionId: string, decision: "approved" | "denied") {
     await fetch(`/api/edit-permissions/${permissionId}`, {
       method: "POST",
@@ -138,171 +143,304 @@ export default function GroupDetailPage() {
     loadPendingRequests();
   }
 
-  // Requester asks for permission
+  // e) Request edit access — replaces alert() with modal, adds per-expense loading
   async function requestEditPermission(expenseId: string, action: string) {
-    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}/request-edit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    const data = await res.json();
-
-    if (data.approved) {
-      // Already approved (owner or previously approved) — show edit inline
-      setEditingExpense(expenseId);
-      const expense = expenses.find((e) => e.id === expenseId);
-      if (expense) {
-        setEditDesc(expense.description);
-        setEditAmount((expense.amountPaise / 100).toString());
-        setEditPaidById(expense.paidById);
-      }
-    } else {
-      alert(
-        `📩 Permission request sent!\n\nThe creator of this expense has been notified. You'll see an alert here once they approve or deny your request.\n\nThe page checks for updates every 8 seconds automatically.`
-      );
-      // Update local state so button shows "Request sent"
-      setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
-    }
-  }
-
-  async function deleteExpense(expenseId: string) {
-    if (!confirm("Delete this expense? Balances will recalculate.")) return;
-    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}`, { method: "DELETE" });
-    if (!res.ok) {
+    setRequestingPermissionId(expenseId);
+    try {
+      const res = await fetch(`/api/groups/${id}/expenses/${expenseId}/request-edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
       const data = await res.json();
-      if (data.error === "permission_required") {
-        requestEditPermission(expenseId, "delete");
-        return;
-      }
-      alert(data.error);
-      return;
-    }
-    setExpenses(expenses.filter((e) => e.id !== expenseId));
-    // Clear permission after use
-    setMyPermissions((prev) => { const n = { ...prev }; delete n[expenseId]; return n; });
-  }
 
-  async function saveEditExpense(expenseId: string) {
-    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        description: editDesc,
-        amountPaise: Math.round(parseFloat(editAmount) * 100),
-        paidById: editPaidById,
-      }),
-    });
-    if (!res.ok) {
-      const d = await res.json();
-      if (d.error === "permission_required") {
-        alert("You need permission from the expense creator to edit this.");
-        return;
-      }
-      alert(d.error);
-      return;
-    }
-    const updated = await res.json();
-    setExpenses(expenses.map((e) => (e.id === expenseId ? updated : e)));
-    setEditingExpense(null);
-    // Clear permission after use
-    setMyPermissions((prev) => { const n = { ...prev }; delete n[expenseId]; return n; });
-  }
-
-  async function generateInvite() {
-    const res = await fetch(`/api/groups/${id}/invite`, { method: "POST" });
-    const data = await res.json();
-    setInviteLink(data.link);
-  }
-
-  async function addPlaceholder() {
-    await fetch(`/api/groups/${id}/placeholder`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: placeholderName, phone: placeholderPhone }),
-    });
-    setPlaceholderName("");
-    setPlaceholderPhone("");
-    setShowPlaceholder(false);
-    loadGroup();
-  }
-
-  const [mergeInfo, setMergeInfo] = useState<any | null>(null);
-
-  async function addExpense(confirmDuplicate = false, confirmMerge = false) {
-    setError(null);
-    const amountPaise = Math.round(parseFloat(amount) * 100);
-
-    const exactAmounts = expenseSplitType === "EXACT"
-      ? Object.fromEntries(Object.entries(exactInputs).map(([uid, v]) => [uid, Math.round(parseFloat(v) * 100)]))
-      : undefined;
-
-    const percentages = expenseSplitType === "PERCENTAGE"
-      ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
-      : undefined;
-
-    const shareUnits = expenseSplitType === "SHARES"
-      ? Object.fromEntries(
-          Object.entries(shareInputs)
-            .filter(([, v]) => v)
-            .map(([uid, v]) => [uid, parseInt(v)])
-        )
-      : undefined;
-
-    const res = await fetch(`/api/groups/${id}/expenses`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate, confirmMerge }),
-    });
-
-    if (res.status === 409) {
-      const data = await res.json();
-      if (data.mergeCandidate) {
-        setMergeInfo(data);
-        setWarning(null);
+      if (data.approved) {
+        setEditingExpense(expenseId);
+        const expense = expenses.find((e) => e.id === expenseId);
+        if (expense) {
+          setEditDesc(expense.description);
+          setEditAmount((expense.amountPaise / 100).toString());
+          setEditPaidById(expense.paidById);
+        }
+      } else if (data.reason === "already_pending") {
+        await confirm({
+          title: "Already requested",
+          message: "You've already requested this — waiting on the expense creator to respond.",
+          mode: "alert",
+        });
+        setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
       } else {
-        setWarning(data.message);
-        setMergeInfo(null);
+        await confirm({
+          title: "Request sent",
+          message: "The creator of this expense has been notified. You'll see an update here once they respond.",
+          mode: "alert",
+        });
+        setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
       }
-      return;
+    } finally {
+      setRequestingPermissionId(null);
     }
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Failed to add expense");
-      return;
-    }
-
-    const expense = await res.json();
-    // A merge updates an EXISTING expense — replace it in place rather than prepending a duplicate row
-    setExpenses((prev) => {
-      const alreadyThere = prev.some((e) => e.id === expense.id);
-      return alreadyThere
-        ? prev.map((e) => (e.id === expense.id ? expense : e))
-        : [expense, ...prev];
-    });
-    setDescription("");
-    setAmount("");
-    setWarning(null);
-    setMergeInfo(null);
   }
 
-  async function addMember() {
-    setMemberError(null);
-    const res = await fetch(`/api/groups/${id}/members`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: memberEmail }),
+  // e) Delete expense — native confirm() replaced with modal, adds per-expense loading
+  async function deleteExpense(expenseId: string) {
+    const ok = await confirm({
+      title: "Delete expense?",
+      message: "This expense will be permanently deleted and balances will recalculate.",
+      confirmLabel: "Delete",
     });
-    const data = await res.json();
-    if (!res.ok) {
-      setMemberError(data.error || "Couldn't add member");
-      return;
+    if (!ok) return;
+
+    setDeletingExpenseId(expenseId);
+    try {
+      const res = await fetch(`/api/groups/${id}/expenses/${expenseId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        if (data.error === "permission_required") {
+          await requestEditPermission(expenseId, "delete");
+          return;
+        }
+        await confirm({ title: "Couldn't delete", message: data.error, mode: "alert" });
+        return;
+      }
+      setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+      setMyPermissions((prev) => { const n = { ...prev }; delete n[expenseId]; return n; });
+    } finally {
+      setDeletingExpenseId(null);
     }
-    setMemberEmail("");
-    loadGroup();
+  }
+
+  // e) Save edit — alert() replaced with modal, adds loading
+  async function saveEditExpense(expenseId: string) {
+    const ok = await confirm({
+      title: "Save changes?",
+      message: "Are you sure you want to save these changes to the expense?",
+      confirmLabel: "Save",
+    });
+    if (!ok) return;
+
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/groups/${id}/expenses/${expenseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: editDesc,
+          amountPaise: Math.round(parseFloat(editAmount) * 100),
+          paidById: editPaidById,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        if (d.error === "permission_required") {
+          await confirm({
+            title: "Permission needed",
+            message: "You need permission from the expense creator to edit this.",
+            mode: "alert",
+          });
+          return;
+        }
+        await confirm({ title: "Couldn't save", message: d.error, mode: "alert" });
+        return;
+      }
+      const updated = await res.json();
+      setExpenses((prev) => prev.map((e) => (e.id === expenseId ? updated : e)));
+      setEditingExpense(null);
+      setMyPermissions((prev) => { const n = { ...prev }; delete n[expenseId]; return n; });
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  // b) Generate invite link — adds loading
+  async function generateInvite() {
+    const ok = await confirm({
+      title: "Generate invite link?",
+      message: "Are you sure you want to generate a new invite link? Anyone with the link can join this group.",
+      confirmLabel: "Generate",
+    });
+    if (!ok) return;
+
+    setGeneratingInvite(true);
+    try {
+      const res = await fetch(`/api/groups/${id}/invite`, { method: "POST" });
+      const data = await res.json();
+      setInviteLink(data.link);
+    } finally {
+      setGeneratingInvite(false);
+    }
+  }
+
+  // c) Add placeholder member — adds loading
+  async function addPlaceholder() {
+    if (!placeholderName.trim()) return;
+    const ok = await confirm({
+      title: "Add placeholder member?",
+      message: `Are you sure you want to add "${placeholderName}" as a placeholder member?`,
+      confirmLabel: "Add",
+    });
+    if (!ok) return;
+
+    setAddingPlaceholder(true);
+    try {
+      await fetch(`/api/groups/${id}/placeholder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: placeholderName, phone: placeholderPhone }),
+      });
+      setPlaceholderName("");
+      setPlaceholderPhone("");
+      setShowPlaceholder(false);
+      await loadGroup();
+    } finally {
+      setAddingPlaceholder(false);
+    }
+  }
+
+  // d) & f) Add expense — duplicate/merge warnings now shown as modals, adds loading
+  async function addExpense(confirmDuplicate = false, confirmMerge = false) {
+    // Only ask "are you sure" on the initial attempt — recursive re-calls after
+    // a duplicate/merge prompt are already a confirmed action.
+    if (!confirmDuplicate && !confirmMerge) {
+      if (!description.trim() || !amount) return;
+      const ok = await confirm({
+        title: "Add expense?",
+        message: `Are you sure you want to add "${description.trim()}" for ₹${amount}?`,
+        confirmLabel: "Add",
+      });
+      if (!ok) return;
+    }
+
+    setError(null);
+    setAddingExpense(true);
+    try {
+      const amountPaise = Math.round(parseFloat(amount) * 100);
+
+      const exactAmounts = expenseSplitType === "EXACT"
+        ? Object.fromEntries(Object.entries(exactInputs).map(([uid, v]) => [uid, Math.round(parseFloat(v) * 100)]))
+        : undefined;
+
+      const percentages = expenseSplitType === "PERCENTAGE"
+        ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
+        : undefined;
+
+      const shareUnits = expenseSplitType === "SHARES"
+        ? Object.fromEntries(
+            Object.entries(shareInputs)
+              .filter(([, v]) => v)
+              .map(([uid, v]) => [uid, parseInt(v)])
+          )
+        : undefined;
+
+      const res = await fetch(`/api/groups/${id}/expenses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate, confirmMerge }),
+      });
+
+      if (res.status === 409) {
+        const data = await res.json();
+        if (data.mergeCandidate) {
+          const ok = await confirm({
+            title: "Merge expense?",
+            message: data.message,
+            confirmLabel: "Merge into existing",
+          });
+          if (ok) await addExpense(false, true);
+          return;
+        } else {
+          const ok = await confirm({
+            title: "Possible duplicate",
+            message: data.message,
+            confirmLabel: "Add anyway",
+          });
+          if (ok) await addExpense(true, false);
+          return;
+        }
+      }
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to add expense");
+        return;
+      }
+
+      const expense = await res.json();
+      // A merge updates an EXISTING expense — replace it in place instead of prepending a duplicate row
+      setExpenses((prev) => {
+        const alreadyThere = prev.some((e) => e.id === expense.id);
+        return alreadyThere
+          ? prev.map((e) => (e.id === expense.id ? expense : e))
+          : [expense, ...prev];
+      });
+      setDescription("");
+      setAmount("");
+    } finally {
+      setAddingExpense(false);
+    }
+  }
+
+  // a) Add member — adds loading
+  async function addMember() {
+    if (!memberEmail.trim()) return;
+    const ok = await confirm({
+      title: "Add member?",
+      message: `Are you sure you want to add "${memberEmail}" to this group?`,
+      confirmLabel: "Add",
+    });
+    if (!ok) return;
+
+    setMemberError(null);
+    setAddingMember(true);
+    try {
+      const res = await fetch(`/api/groups/${id}/members`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: memberEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMemberError(data.error || "Couldn't add member");
+        return;
+      }
+      setMemberEmail("");
+      await loadGroup();
+    } finally {
+      setAddingMember(false);
+    }
   }
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+      {(() => {
+        const actionLoading =
+          addingMember ||
+          generatingInvite ||
+          addingPlaceholder ||
+          addingExpense ||
+          savingEdit ||
+          deletingExpenseId !== null ||
+          requestingPermissionId !== null;
+
+        if (initialLoading) return <PageLoader label="Loading group" />;
+        if (actionLoading) {
+          const label = addingMember
+            ? "Adding member"
+            : generatingInvite
+            ? "Generating invite link"
+            : addingPlaceholder
+            ? "Adding placeholder"
+            : addingExpense
+            ? "Saving expense"
+            : savingEdit
+            ? "Saving changes"
+            : deletingExpenseId !== null
+            ? "Deleting expense"
+            : "Sending request";
+          return <PageLoader label={label} />;
+        }
+        return null;
+      })()}
+
       <Link href="/dashboard" style={{ fontSize: 14, color: "#888" }}>
         ← Back to dashboard
       </Link>
@@ -361,11 +499,18 @@ export default function GroupDetailPage() {
           </li>
         ))}
       </ul>
+
+      {/* a) Add member */}
       <input placeholder="Member's email" value={memberEmail} onChange={(e) => setMemberEmail(e.target.value)} />
-      <button onClick={addMember} disabled={!memberEmail}>Add member</button>
+      <button onClick={addMember} disabled={!memberEmail || addingMember}>
+        {addingMember ? <Spinner /> : "Add member"}
+      </button>
       {memberError && <p style={{ color: "red" }}>{memberError}</p>}
 
-      <button onClick={generateInvite}>Generate invite link</button>
+      {/* b) Generate invite link */}
+      <button onClick={generateInvite} disabled={generatingInvite}>
+        {generatingInvite ? <Spinner /> : "Generate invite link"}
+      </button>
       {inviteLink && (
         <div style={{ marginTop: 8 }}>
           <input value={inviteLink} readOnly style={{ width: "100%" }} />
@@ -374,12 +519,15 @@ export default function GroupDetailPage() {
         </div>
       )}
 
+      {/* c) Add placeholder member */}
       <button onClick={() => setShowPlaceholder(!showPlaceholder)}>Add placeholder member</button>
       {showPlaceholder && (
         <div>
           <input placeholder="Name (required)" value={placeholderName} onChange={(e) => setPlaceholderName(e.target.value)} />
           <input placeholder="Phone (optional)" value={placeholderPhone} onChange={(e) => setPlaceholderPhone(e.target.value)} />
-          <button onClick={addPlaceholder} disabled={!placeholderName}>Add placeholder</button>
+          <button onClick={addPlaceholder} disabled={!placeholderName || addingPlaceholder}>
+            {addingPlaceholder ? <Spinner /> : "Add placeholder"}
+          </button>
           <p style={{ fontSize: 12, color: "#888" }}>No app required — included in splits but can't log in.</p>
         </div>
       )}
@@ -440,29 +588,20 @@ export default function GroupDetailPage() {
         </div>
       )}
 
-      <button onClick={() => addExpense(false, false)}>Add</button>
-      {warning && (
-        <div style={{ color: "orange" }}>
-          {warning} <button onClick={() => addExpense(true, false)}>Add anyway</button>
-        </div>
-      )}
-      {mergeInfo && (
-        <div style={{ border: "1px solid #f59e0b", background: "#1a1a0a", padding: 12, marginTop: 8, borderRadius: 6 }}>
-          <p style={{ margin: "0 0 8px", fontSize: 13 }}>{mergeInfo.message}</p>
-          <button onClick={() => addExpense(false, true)} style={{ marginRight: 8 }}>
-            Merge into existing
-          </button>
-          <button onClick={() => setMergeInfo(null)}>Cancel</button>
-        </div>
-      )}
+      {/* d) & f) Add expense — merge/duplicate handling now happens inside addExpense via modals */}
+      <button onClick={() => addExpense(false, false)} disabled={addingExpense}>
+        {addingExpense ? <Spinner /> : "Add"}
+      </button>
       {error && <p style={{ color: "red" }}>{error}</p>}
 
       <h2>Expenses</h2>
       <ul>
         {expenses.map((e) => {
           const isOwner = e.createdById === currentUserId;
-          const permStatus = myPermissions[e.id]; // undefined | "pending" | "approved" | "denied"
+          const permStatus = myPermissions[e.id];
           const hasApproval = permStatus === "approved";
+          const isDeleting = deletingExpenseId === e.id;
+          const isRequesting = requestingPermissionId === e.id;
 
           return (
             <li key={e.id} style={{ marginBottom: 12 }}>
@@ -476,8 +615,10 @@ export default function GroupDetailPage() {
                       <option key={m.userId} value={m.userId}>{m.user.name || m.user.email}</option>
                     ))}
                   </select>
-                  <button onClick={() => saveEditExpense(e.id)}>Save</button>
-                  <button onClick={() => setEditingExpense(null)}>Cancel</button>
+                  <button onClick={() => saveEditExpense(e.id)} disabled={savingEdit}>
+                    {savingEdit ? <Spinner /> : "Save"}
+                  </button>
+                  <button onClick={() => setEditingExpense(null)} disabled={savingEdit}>Cancel</button>
                 </div>
               ) : (
                 // ── Display row ──
@@ -494,7 +635,7 @@ export default function GroupDetailPage() {
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     {(isOwner || hasApproval) ? (
-                      // Owner or approved — show Edit and Delete
+                      // e) Owner or approved — show Edit and Delete
                       <>
                         <button onClick={() => {
                           setEditingExpense(e.id);
@@ -502,25 +643,25 @@ export default function GroupDetailPage() {
                           setEditAmount((e.amountPaise / 100).toString());
                           setEditPaidById(e.paidById);
                         }}>Edit</button>
-                        <button onClick={() => deleteExpense(e.id)}>Delete</button>
+                        <button onClick={() => deleteExpense(e.id)} disabled={isDeleting}>
+                          {isDeleting ? <Spinner /> : "Delete"}
+                        </button>
                       </>
                     ) : permStatus === "pending" ? (
-                      // Waiting for owner's response
                       <span style={{ fontSize: 12, color: "#f59e0b" }}>
                         ⏳ Waiting for approval...
                       </span>
                     ) : permStatus === "denied" ? (
-                      // Owner denied — show greyed out message
                       <span style={{ fontSize: 12, color: "#888" }}>
                         ✗ Permission denied
                       </span>
                     ) : (
-                      // No request yet — show request button
                       <button
                         onClick={() => requestEditPermission(e.id, "edit")}
+                        disabled={isRequesting}
                         style={{ fontSize: 12 }}
                       >
-                        🔒 Request edit access
+                        {isRequesting ? <Spinner /> : "🔒 Request edit access"}
                       </button>
                     )}
                   </div>
