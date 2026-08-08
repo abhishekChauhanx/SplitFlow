@@ -1,0 +1,125 @@
+"use client";
+
+import { useMemo } from "react";
+import type { ColDef } from "ag-grid-community";
+import DataGrid, { currencyFormatter, relativeDateFormatter } from "@/components/DataGrid";
+import Spinner from "@/components/Spinner";
+
+type ExpenseRow = {
+  id: string;
+  description: string;
+  amountRupees: number;
+  paidByName: string;
+  contributors: string;
+  splitType: string;
+  createdAt: string;
+  isOwner: boolean;
+  permStatus: string | undefined; // "pending" | "approved" | "denied" | undefined
+};
+
+export default function GroupExpensesGrid({
+  expenses,
+  currentUserId,
+  myPermissions,
+  deletingExpenseId,
+  requestingPermissionId,
+  onEdit,
+  onDelete,
+  onRequestAccess,
+}: {
+  expenses: any[];
+  currentUserId: string | null;
+  myPermissions: Record<string, string>;
+  deletingExpenseId: string | null;
+  requestingPermissionId: string | null;
+  onEdit: (expense: any) => void;
+  onDelete: (expenseId: string) => void;
+  onRequestAccess: (expenseId: string) => void;
+}) {
+  const rows = useMemo<ExpenseRow[]>(
+    () =>
+      expenses.map((e) => ({
+        id: e.id,
+        description: e.description,
+        amountRupees: e.amountPaise / 100,
+        paidByName: e.paidBy?.name || e.paidBy?.email || "—",
+        contributors:
+          e.payments && e.payments.length > 1
+            ? e.payments
+                .map(
+                  (p: any) =>
+                    `${p.user?.name || p.user?.email || "someone"}: ₹${(p.amountPaise / 100).toFixed(2)}`
+                )
+                .join(" · ")
+            : "—",
+        splitType: e.splitType,
+        createdAt: e.createdAt,
+        isOwner: e.createdById === currentUserId,
+        permStatus: myPermissions[e.id],
+      })),
+    [expenses, currentUserId, myPermissions]
+  );
+
+  const columnDefs = useMemo<ColDef<ExpenseRow>[]>(
+    () => [
+      { headerName: "Description", field: "description", flex: 2, minWidth: 160, enableValue: false },
+      {
+        headerName: "Amount",
+        field: "amountRupees",
+        type: "numericColumn",
+        valueFormatter: currencyFormatter,
+        minWidth: 120,
+      },
+      { headerName: "Paid by", field: "paidByName", minWidth: 130, enableValue: false },
+      { headerName: "Contributors", field: "contributors", minWidth: 220, flex: 2, enableValue: false },
+      { headerName: "Split", field: "splitType", width: 110, enableValue: false },
+      {
+        headerName: "Date",
+        field: "createdAt",
+        valueFormatter: relativeDateFormatter,
+        minWidth: 120,
+        enableValue: false,
+      },
+      {
+        headerName: "Actions",
+        minWidth: 220,
+        enableValue: false,
+        sortable: false,
+        filter: false,
+        cellRenderer: (params: { data: ExpenseRow }) => {
+          const row = params.data;
+          const isDeleting = deletingExpenseId === row.id;
+          const isRequesting = requestingPermissionId === row.id;
+          const original = expenses.find((e) => e.id === row.id);
+
+          if (row.isOwner || row.permStatus === "approved") {
+            return (
+              <div style={{ display: "flex", gap: 6, alignItems: "center", height: "100%" }}>
+                <button onClick={() => onEdit(original)} style={{ fontSize: 12 }}>
+                  Edit
+                </button>
+                <button onClick={() => onDelete(row.id)} disabled={isDeleting} style={{ fontSize: 12 }}>
+                  {isDeleting ? <Spinner /> : "Delete"}
+                </button>
+              </div>
+            );
+          }
+          if (row.permStatus === "pending") {
+            return <span style={{ fontSize: 12, color: "#f59e0b" }}>⏳ Waiting for approval...</span>;
+          }
+          if (row.permStatus === "denied") {
+            return <span style={{ fontSize: 12, color: "#888" }}>✗ Permission denied</span>;
+          }
+          return (
+            <button onClick={() => onRequestAccess(row.id)} disabled={isRequesting} style={{ fontSize: 12 }}>
+              {isRequesting ? <Spinner /> : "🔒 Request edit access"}
+            </button>
+          );
+        },
+      },
+    ],
+    [expenses, deletingExpenseId, requestingPermissionId, onEdit, onDelete, onRequestAccess]
+  );
+
+  return <DataGrid<ExpenseRow> rows={rows} columnDefs={columnDefs} getRowId={(r) => r.id} height={420} />;
+}

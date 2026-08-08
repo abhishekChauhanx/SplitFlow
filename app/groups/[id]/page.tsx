@@ -7,6 +7,9 @@ import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
 import PageLoader from "@/components/PageLoader";
 import { useModal } from "@/components/ModalProvider";
+import GroupSummaryCards from "@/components/GroupSummaryCards";
+import GroupExpensesGrid from "@/components/GroupExpensesGrid";
+import type { GroupSummary } from "@/lib/group-summary";
 
 export default function GroupDetailPage() {
   const { id } = useParams();
@@ -15,6 +18,7 @@ export default function GroupDetailPage() {
   const [expenses, setExpenses] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [summary, setSummary] = useState<GroupSummary | null>(null);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [paidById, setPaidById] = useState("");
@@ -63,6 +67,11 @@ export default function GroupDetailPage() {
   const loadExpenses = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/expenses`);
     setExpenses(await res.json());
+  }, [id]);
+
+  const loadSummary = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/summary`);
+    if (res.ok) setSummary(await res.json());
   }, [id]);
 
   const loadPendingRequests = useCallback(() => {
@@ -116,7 +125,7 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    Promise.all([loadExpenses(), loadGroup(), loadPendingRequests(), loadMyPermissions()]).finally(() =>
+    Promise.all([loadExpenses(), loadGroup(), loadSummary(), loadPendingRequests(), loadMyPermissions()]).finally(() =>
       setInitialLoading(false)
     );
 
@@ -128,11 +137,11 @@ export default function GroupDetailPage() {
     }, 8000);
 
     return () => clearInterval(interval);
-  }, [id, loadExpenses, loadGroup, loadPendingRequests, loadMyPermissions]);
+  }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions]);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadExpenses(), loadGroup(), loadPendingRequests(), loadMyPermissions()]);
-  }, [loadExpenses, loadGroup, loadPendingRequests, loadMyPermissions]);
+    await Promise.all([loadExpenses(), loadGroup(), loadSummary(), loadPendingRequests(), loadMyPermissions()]);
+  }, [loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions]);
 
   async function respondToRequest(permissionId: string, decision: "approved" | "denied") {
     await fetch(`/api/edit-permissions/${permissionId}`, {
@@ -205,6 +214,7 @@ export default function GroupDetailPage() {
       }
       setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
       setMyPermissions((prev) => { const n = { ...prev }; delete n[expenseId]; return n; });
+      loadSummary();
     } finally {
       setDeletingExpenseId(null);
     }
@@ -247,6 +257,7 @@ export default function GroupDetailPage() {
       setExpenses((prev) => prev.map((e) => (e.id === expenseId ? updated : e)));
       setEditingExpense(null);
       setMyPermissions((prev) => { const n = { ...prev }; delete n[expenseId]; return n; });
+      loadSummary();
     } finally {
       setSavingEdit(false);
     }
@@ -292,6 +303,7 @@ export default function GroupDetailPage() {
       setPlaceholderPhone("");
       setShowPlaceholder(false);
       await loadGroup();
+      await loadSummary();
     } finally {
       setAddingPlaceholder(false);
     }
@@ -374,6 +386,7 @@ export default function GroupDetailPage() {
       });
       setDescription("");
       setAmount("");
+      loadSummary();
     } finally {
       setAddingExpense(false);
     }
@@ -404,13 +417,14 @@ export default function GroupDetailPage() {
       }
       setMemberEmail("");
       await loadGroup();
+      await loadSummary();
     } finally {
       setAddingMember(false);
     }
   }
 
   return (
-    <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+    <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
       {(() => {
         const actionLoading =
           addingMember ||
@@ -594,83 +608,55 @@ export default function GroupDetailPage() {
       </button>
       {error && <p style={{ color: "red" }}>{error}</p>}
 
-      <h2>Expenses</h2>
-      <ul>
-        {expenses.map((e) => {
-          const isOwner = e.createdById === currentUserId;
-          const permStatus = myPermissions[e.id];
-          const hasApproval = permStatus === "approved";
-          const isDeleting = deletingExpenseId === e.id;
-          const isRequesting = requestingPermissionId === e.id;
+      {summary && <GroupSummaryCards summary={summary} />}
 
-          return (
-            <li key={e.id} style={{ marginBottom: 12 }}>
-              {editingExpense === e.id ? (
-                // ── Edit form ──
-                <div>
-                  <input value={editDesc} onChange={(ev) => setEditDesc(ev.target.value)} />
-                  <input type="number" value={editAmount} onChange={(ev) => setEditAmount(ev.target.value)} />
-                  <select value={editPaidById} onChange={(ev) => setEditPaidById(ev.target.value)}>
-                    {members.map((m) => (
-                      <option key={m.userId} value={m.userId}>{m.user.name || m.user.email}</option>
-                    ))}
-                  </select>
-                  <button onClick={() => saveEditExpense(e.id)} disabled={savingEdit}>
-                    {savingEdit ? <Spinner /> : "Save"}
-                  </button>
-                  <button onClick={() => setEditingExpense(null)} disabled={savingEdit}>Cancel</button>
-                </div>
-              ) : (
-                // ── Display row ──
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <span>{e.description} — ₹{(e.amountPaise / 100).toFixed(2)}</span>
-                    {e.payments && e.payments.length > 1 && (
-                      <p style={{ margin: "2px 0 0", fontSize: 11, color: "#888" }}>
-                        {e.payments
-                          .map((p: any) => `${p.user?.name || p.user?.email || "someone"}: ₹${(p.amountPaise / 100).toFixed(2)}`)
-                          .join(" · ")}
-                      </p>
-                    )}
-                  </div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {(isOwner || hasApproval) ? (
-                      // e) Owner or approved — show Edit and Delete
-                      <>
-                        <button onClick={() => {
-                          setEditingExpense(e.id);
-                          setEditDesc(e.description);
-                          setEditAmount((e.amountPaise / 100).toString());
-                          setEditPaidById(e.paidById);
-                        }}>Edit</button>
-                        <button onClick={() => deleteExpense(e.id)} disabled={isDeleting}>
-                          {isDeleting ? <Spinner /> : "Delete"}
-                        </button>
-                      </>
-                    ) : permStatus === "pending" ? (
-                      <span style={{ fontSize: 12, color: "#f59e0b" }}>
-                        ⏳ Waiting for approval...
-                      </span>
-                    ) : permStatus === "denied" ? (
-                      <span style={{ fontSize: 12, color: "#888" }}>
-                        ✗ Permission denied
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => requestEditPermission(e.id, "edit")}
-                        disabled={isRequesting}
-                        style={{ fontSize: 12 }}
-                      >
-                        {isRequesting ? <Spinner /> : "🔒 Request edit access"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+      <h2>Expenses</h2>
+      <GroupExpensesGrid
+        expenses={expenses}
+        currentUserId={currentUserId}
+        myPermissions={myPermissions}
+        deletingExpenseId={deletingExpenseId}
+        requestingPermissionId={requestingPermissionId}
+        onEdit={(expense) => {
+          setEditingExpense(expense.id);
+          setEditDesc(expense.description);
+          setEditAmount((expense.amountPaise / 100).toString());
+          setEditPaidById(expense.paidById);
+        }}
+        onDelete={deleteExpense}
+        onRequestAccess={(expenseId) => requestEditPermission(expenseId, "edit")}
+      />
+
+      {editingExpense && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 12,
+            background: "#161616",
+            border: "1px solid #2a2a2a",
+            borderRadius: 8,
+          }}
+        >
+          <h3 style={{ margin: "0 0 8px" }}>Edit expense</h3>
+          <input value={editDesc} onChange={(ev) => setEditDesc(ev.target.value)} />
+          <input type="number" value={editAmount} onChange={(ev) => setEditAmount(ev.target.value)} />
+          <select value={editPaidById} onChange={(ev) => setEditPaidById(ev.target.value)}>
+            {members.map((m) => (
+              <option key={m.userId} value={m.userId}>
+                {m.user.name || m.user.email}
+              </option>
+            ))}
+          </select>
+          <div style={{ marginTop: 8 }}>
+            <button onClick={() => saveEditExpense(editingExpense)} disabled={savingEdit}>
+              {savingEdit ? <Spinner /> : "Save"}
+            </button>
+            <button onClick={() => setEditingExpense(null)} disabled={savingEdit} style={{ marginLeft: 8 }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
