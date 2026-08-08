@@ -288,7 +288,11 @@ export default function GroupDetailPage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Link href="/dashboard" style={{ fontSize: 14, color: "#888" }}>
+        ← Back to dashboard
+      </Link>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <h1 style={{ margin: 0 }}>Group</h1>
         <RefreshButton onRefresh={refreshAll} />
       </div>

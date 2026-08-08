@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import QRCode from "qrcode";
 import RefreshButton from "@/components/RefreshButton";
 
@@ -98,7 +99,11 @@ export default function SettlePage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Link href={`/groups/${id}`} style={{ fontSize: 14, color: "#888" }}>
+        ← Back to group
+      </Link>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         <h1 style={{ margin: 0 }}>Settle up</h1>
         <RefreshButton onRefresh={refreshAll} />
       </div>

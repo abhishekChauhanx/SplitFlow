@@ -21,10 +21,22 @@ export default function DashboardPage() {
   }, [loadGroups]);
 
   async function createGroup() {
+    const trimmedName = newGroupName.trim();
+    if (!trimmedName) return;
+
+    // Case-insensitive check against groups already loaded for this user
+    const duplicate = groups.find(
+      (g) => g.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicate) {
+      alert(`"${trimmedName}" group already exists — please try a different name.`);
+      return;
+    }
+
     const res = await fetch("/api/groups", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newGroupName }),
+      body: JSON.stringify({ name: trimmedName }),
     });
     const group = await res.json();
     setGroups([...groups, group]);
