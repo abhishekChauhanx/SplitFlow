@@ -10,15 +10,20 @@ export async function POST(
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const permission = await prisma.editPermission.findUnique({ where: { id: permissionId } });
-  if (!permission) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const permission = await prisma.editPermission.findUnique({
+    where: { id: permissionId },
+    include: {
+      requestedBy: { select: { name: true, email: true } },
+      expense: { select: { description: true } },
+    },
+  });
 
-  // Only the expense owner can approve/deny
+  if (!permission) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (permission.ownerId !== userId) {
     return NextResponse.json({ error: "Only the expense creator can approve this" }, { status: 403 });
   }
 
-  const { decision } = await req.json(); // "approved" or "denied"
+  const { decision } = await req.json(); // "approved" | "denied"
   const updated = await prisma.editPermission.update({
     where: { id: permissionId },
     data: { status: decision },

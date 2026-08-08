@@ -122,7 +122,7 @@ model RecurringTemplate {
 model EditPermission {
   id            String   @id @default(cuid())
   expenseId     String
-  expense       Expense  @relation(fields: [expenseId], references: [id])
+  expense       Expense  @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   requestedById String
   requestedBy   User     @relation("RequestedPermissions", fields: [requestedById], references: [id])
   ownerId       String
