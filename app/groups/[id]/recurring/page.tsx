@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
+import RefreshButton from "@/components/RefreshButton";
 
 export default function RecurringPage() {
   const { id } = useParams();
@@ -13,14 +14,26 @@ export default function RecurringPage() {
   const [frequencyDays, setFrequencyDays] = useState("30");
   const [shareInputs, setShareInputs] = useState<Record<string, string>>({});
 
-  function load() {
-    fetch(`/api/groups/${id}/recurring`).then((r) => r.json()).then(setTemplates);
-  }
+  const loadTemplates = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/recurring`);
+    const data = await res.json();
+    setTemplates(data);
+  }, [id]);
+
+  const loadMembers = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}`);
+    const g = await res.json();
+    setMembers(g.members);
+  }, [id]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadTemplates(), loadMembers()]);
+  }, [loadTemplates, loadMembers]);
 
   useEffect(() => {
-    load();
-    fetch(`/api/groups/${id}`).then((r) => r.json()).then((g) => setMembers(g.members));
-  }, [id]);
+    loadTemplates();
+    loadMembers();
+  }, [id, loadTemplates, loadMembers]);
 
   async function createTemplate() {
     const amountPaise = Math.round(parseFloat(amount) * 100);
@@ -40,19 +53,22 @@ export default function RecurringPage() {
     });
     setDescription("");
     setAmount("");
-    load();
+    loadTemplates();
   }
 
   async function runNow() {
     const res = await fetch("/api/cron/run-recurring", { method: "POST" });
     const data = await res.json();
     alert(`Generated ${data.generated} expense(s)`);
-    load();
+    loadTemplates();
   }
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
-      <h1>Recurring expenses</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <h1 style={{ margin: 0 }}>Recurring expenses</h1>
+        <RefreshButton onRefresh={refreshAll} />
+      </div>
 
       <h2>Create a template</h2>
       <input placeholder="Description (e.g. Rent, Mess bill)" value={description} onChange={(e) => setDescription(e.target.value)} />

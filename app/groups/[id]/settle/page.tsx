@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import QRCode from "qrcode";
+import RefreshButton from "@/components/RefreshButton";
 
 export default function SettlePage() {
   const { id } = useParams();
@@ -12,6 +13,7 @@ export default function SettlePage() {
   const [history, setHistory] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<Record<number, string>>({});
+
   async function generateQr(index: number, s: any, amountPaiseOverride?: number) {
     if (!s.toUpiId) return;
     const amountPaise = amountPaiseOverride ?? s.amountPaise;
@@ -21,18 +23,28 @@ export default function SettlePage() {
     setQrCodes((prev) => ({ ...prev, [index]: dataUrl }));
   }
 
-  function loadHistory() {
-    fetch(`/api/groups/${id}/settlement-history`).then((r) => r.json()).then(setHistory);
-  }
+  const loadSuggestions = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/settlements`);
+    const data = await res.json();
+    setSuggestions(data);
+    data.forEach((s: any, i: number) => generateQr(i, s));
+  }, [id]);
+
+  const loadHistory = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/settlement-history`);
+    const data = await res.json();
+    setHistory(data);
+  }, [id]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadSuggestions(), loadHistory()]);
+  }, [loadSuggestions, loadHistory]);
 
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    fetch(`/api/groups/${id}/settlements`).then((r) => r.json()).then(async (data) => {
-      setSuggestions(data);
-      data.forEach((s: any, i: number) => generateQr(i, s));
-    });
+    loadSuggestions();
     loadHistory();
-  }, [id]);
+  }, [id, loadSuggestions, loadHistory]);
 
   function handlePartialChange(index: number, value: string, s: any) {
     setPartialAmounts({ ...partialAmounts, [index]: value });
@@ -86,7 +98,11 @@ export default function SettlePage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
-      <h1>Settle up</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <h1 style={{ margin: 0 }}>Settle up</h1>
+        <RefreshButton onRefresh={refreshAll} />
+      </div>
+
       {suggestions.length === 0 && <p>Everyone is settled up. 🎉</p>}
 
       {suggestions.map((s, i) => {

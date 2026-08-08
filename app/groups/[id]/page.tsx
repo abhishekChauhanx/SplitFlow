@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import RefreshButton from "@/components/RefreshButton";
 
 export default function GroupDetailPage() {
   const { id } = useParams();
@@ -40,19 +41,18 @@ export default function GroupDetailPage() {
   // was why the "approved" alert kept firing every poll instead of just once.
   const notifiedPermissionsRef = useRef<Set<string>>(new Set());
 
-  function loadGroup() {
-    fetch(`/api/groups/${id}`)
-      .then((r) => r.json())
-      .then((group) => {
-        if (!group || !group.members) return;
-        setMembers(group.members);
-        if (group.members.length > 0) setPaidById(group.members[0].userId);
-      });
-  }
+  const loadGroup = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}`);
+    const group = await res.json();
+    if (!group || !group.members) return;
+    setMembers(group.members);
+    if (group.members.length > 0) setPaidById(group.members[0].userId);
+  }, [id]);
 
-  function loadExpenses() {
-    fetch(`/api/groups/${id}/expenses`).then((r) => r.json()).then(setExpenses);
-  }
+  const loadExpenses = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/expenses`);
+    setExpenses(await res.json());
+  }, [id]);
 
   // Poll for pending requests (owner side — someone wants to edit MY expense)
   const loadPendingRequests = useCallback(() => {
@@ -112,14 +112,21 @@ export default function GroupDetailPage() {
     loadPendingRequests();
     loadMyPermissions();
 
-    // Poll every 8 seconds for real-time updates
+    // Poll every 8 seconds for real-time updates, but only while the tab is visible
     const interval = setInterval(() => {
-      loadPendingRequests();
-      loadMyPermissions();
+      if (document.visibilityState === "visible") {
+        loadPendingRequests();
+        loadMyPermissions();
+      }
     }, 8000);
 
     return () => clearInterval(interval);
-  }, [id, loadPendingRequests, loadMyPermissions]);
+  }, [id, loadExpenses, loadGroup, loadPendingRequests, loadMyPermissions]);
+
+  // Manual refresh: reloads everything this page depends on at once
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadExpenses(), loadGroup(), loadPendingRequests(), loadMyPermissions()]);
+  }, [loadExpenses, loadGroup, loadPendingRequests, loadMyPermissions]);
 
   // Owner responds to a request
   async function respondToRequest(permissionId: string, decision: "approved" | "denied") {
@@ -281,7 +288,10 @@ export default function GroupDetailPage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
-      <h1>Group</h1>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <h1 style={{ margin: 0 }}>Group</h1>
+        <RefreshButton onRefresh={refreshAll} />
+      </div>
 
       <Link href={`/groups/${id}/balances`}>View balances</Link>
       {" | "}

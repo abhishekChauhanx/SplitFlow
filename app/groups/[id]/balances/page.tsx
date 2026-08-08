@@ -1,9 +1,9 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import RefreshButton from "@/components/RefreshButton";
 
 type Balance = {
   userId: string;
@@ -24,30 +24,29 @@ export default function BalancesPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadData = useCallback(async () => {
     if (!id) return;
+    try {
+      const [meResponse, balancesResponse] = await Promise.all([
+        fetch("/api/me"),
+        fetch(`/api/groups/${id}/balances`),
+      ]);
 
-    async function loadData() {
-      try {
-        const [meResponse, balancesResponse] = await Promise.all([
-          fetch("/api/me"),
-          fetch(`/api/groups/${id}/balances`),
-        ]);
+      const me = await meResponse.json();
+      const balanceData = await balancesResponse.json();
 
-        const me = await meResponse.json();
-        const balanceData = await balancesResponse.json();
-
-        setCurrentUserId(me.userId);
-        setBalances(balanceData);
-      } catch (error) {
-        console.error("Failed to load balances:", error);
-      } finally {
-        setLoading(false);
-      }
+      setCurrentUserId(me.userId);
+      setBalances(balanceData);
+    } catch (error) {
+      console.error("Failed to load balances:", error);
+    } finally {
+      setLoading(false);
     }
-
-    loadData();
   }, [id]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const creditors = balances.filter((b) => b.netPaise > 0);
   const debtors = balances.filter((b) => b.netPaise < 0);
@@ -161,9 +160,12 @@ export default function BalancesPage() {
       <div className="mx-auto w-full max-w-xl px-4 py-10">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Who owes what
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              Who owes what
+            </h1>
+            <RefreshButton onRefresh={loadData} />
+          </div>
 
           <div className="mt-3 flex items-center gap-2 text-sm">
             <Link
