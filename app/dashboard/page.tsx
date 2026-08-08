@@ -7,14 +7,21 @@ import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
 import PageLoader from "@/components/PageLoader";
 import { useModal } from "@/components/ModalProvider";
+import UserAvatarMenu from "@/components/UserAvatarMenu";
+import TableOverlay from "@/components/TableOverlay";
+import GroupsSummaryGrid from "@/components/GroupsSummaryGrid";
+import type { GroupSummaryRow } from "@/lib/dashboard-summary";
 
 export default function DashboardPage() {
   const router = useRouter();
   const { confirm } = useModal();
   const [groups, setGroups] = useState<any[]>([]);
+  const [summaryRows, setSummaryRows] = useState<GroupSummaryRow[]>([]);
+  const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
   const [newGroupName, setNewGroupName] = useState("");
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [showInfoOverlay, setShowInfoOverlay] = useState(false);
 
   const loadGroups = useCallback(async () => {
     const res = await fetch("/api/groups");
@@ -22,15 +29,28 @@ export default function DashboardPage() {
     setGroups(data);
   }, []);
 
+  const loadSummary = useCallback(async () => {
+    const res = await fetch("/api/dashboard/groups-summary");
+    if (res.ok) setSummaryRows(await res.json());
+  }, []);
+
+  const loadMe = useCallback(async () => {
+    const res = await fetch("/api/me");
+    if (res.ok) setMe(await res.json());
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadGroups(), loadSummary(), loadMe()]);
+  }, [loadGroups, loadSummary, loadMe]);
+
   useEffect(() => {
-    loadGroups().finally(() => setInitialLoading(false));
-  }, [loadGroups]);
+    refreshAll().finally(() => setInitialLoading(false));
+  }, [refreshAll]);
 
   async function createGroup() {
     const trimmedName = newGroupName.trim();
     if (!trimmedName) return;
 
-    // Case-insensitive check against groups already loaded for this user
     const duplicate = groups.find(
       (g) => g.name.trim().toLowerCase() === trimmedName.toLowerCase()
     );
@@ -60,6 +80,7 @@ export default function DashboardPage() {
       const group = await res.json();
       setGroups([...groups, group]);
       setNewGroupName("");
+      await loadSummary(); // new group starts with zero activity but should appear
     } finally {
       setCreatingGroup(false);
     }
@@ -79,9 +100,15 @@ export default function DashboardPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ margin: 0 }}>Your groups</h1>
-          <RefreshButton onRefresh={loadGroups} />
+          <RefreshButton onRefresh={refreshAll} />
         </div>
-        <button onClick={handleLogout}>Log out</button>
+
+        <UserAvatarMenu
+          name={me?.name}
+          email={me?.email}
+          onOpenInfo={() => setShowInfoOverlay(true)}
+          onLogout={handleLogout}
+        />
       </div>
 
       <div style={{ display: "flex", gap: 8, margin: "16px 0 24px" }}>
@@ -102,6 +129,21 @@ export default function DashboardPage() {
           </li>
         ))}
       </ul>
+
+      {showInfoOverlay && (
+        <TableOverlay title="Your groups summary" onClose={() => setShowInfoOverlay(false)}>
+          {summaryRows.length === 0 ? (
+            <p style={{ color: "#888" }}>No groups yet.</p>
+          ) : (
+            <>
+              <GroupsSummaryGrid rows={summaryRows} />
+              <p style={{ fontSize: 12, color: "#666", marginTop: 8 }}>
+                Drag-select a range of numeric cells, right-click, then choose "Chart Range" to build a chart from any selection.
+              </p>
+            </>
+          )}
+        </TableOverlay>
+      )}
     </div>
   );
 }
