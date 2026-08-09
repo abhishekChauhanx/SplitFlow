@@ -32,19 +32,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { toUserId, amountPaise ,paymentMethod  } = await req.json();
+  const { toUserId, amountPaise, paymentMethod } = await req.json();
 
   if (userId === toUserId) {
     return NextResponse.json({ error: "You can't record a payment to yourself" }, { status: 400 });
   }
 
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
   const settlement = await prisma.settlement.create({
     data: {
       groupId: id,
-      fromUserId: userId, // the logged-in person IS the payer, always
+      fromUserId: userId,
       toUserId,
       amountPaise,
-      paymentMethod: paymentMethod || "upi",
+      paymentMethod: paymentMethod === "cash" ? "cash" : "upi",
       status: "pending",
     },
   });
