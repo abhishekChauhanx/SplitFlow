@@ -17,8 +17,8 @@
     "@prisma/adapter-pg": "^7.9.0",
     "@prisma/client": "^7.9.0",
     "ag-charts-community": "^14.1.0",
+    "ag-charts-react": "^14.1.0",
     "ag-grid-community": "^36.1.0",
-    "ag-grid-enterprise": "^36.1.0",
     "ag-grid-react": "^36.1.0",
     "firebase": "^12.16.0",
     "firebase-admin": "^10.3.0",
@@ -28,7 +28,8 @@
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -52,8 +52,10 @@ export default function GroupDetailPage() {
   const [myPermissions, setMyPermissions] = useState<Record<string, string>>({}); // expenseId -> status
   const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, string>>({}); // expenseId -> permissionId
 
-  // Tracks which permission IDs we've already shown a modal for, so polling
-  // doesn't show the same "approved"/"denied" modal on every 8s tick.
+  // Same-tick safety net against double-firing within one poll. The real guard
+  // against repeat notifications on remount/navigation is server-side (the
+  // `notified` flag on EditPermission, and deleting denied rows once shown) —
+  // see loadMyPermissions below.
   const notifiedPermissionsRef = useRef<Set<string>>(new Set());
 
   const loadGroup = useCallback(async () => {
@@ -74,54 +76,64 @@ export default function GroupDetailPage() {
     if (res.ok) setSummary(await res.json());
   }, [id]);
 
+  // Scoped to this group via groupId — without this, incoming requests from
+  // every group the user owns expenses in would show up here regardless of
+  // which group's page is actually open.
   const loadPendingRequests = useCallback(() => {
-    return fetch("/api/edit-permissions/pending")
+    return fetch(`/api/edit-permissions/pending?groupId=${id}`)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setPendingRequests(data);
       });
-  }, []);
+  }, [id]);
 
+  // Scoped to this group via groupId, same reasoning as above. Notifications
+  // are acknowledged server-side right after being shown, so they can't come
+  // back on the next poll, on remount, or after navigating to another group.
   const loadMyPermissions = useCallback(() => {
-    return fetch("/api/edit-permissions/my-requests")
+    return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
       .then((r) => r.json())
-      .then((data: any[]) => {
+      .then(async (data: any[]) => {
         if (!Array.isArray(data)) return;
 
         const map: Record<string, string> = {};
         const idMap: Record<string, string> = {};
 
-        data.forEach((p) => {
-          if (!p.expense) return; // orphaned permission for a deleted expense
+        for (const p of data) {
+          if (!p.expense) continue; // orphaned permission for a deleted expense
 
           map[p.expenseId] = p.status;
           idMap[p.expenseId] = p.id;
 
-          if (
-            (p.status === "approved" || p.status === "denied") &&
-            !notifiedPermissionsRef.current.has(p.id)
-          ) {
+          const alreadyNotified = p.notified || notifiedPermissionsRef.current.has(p.id);
+
+          if (p.status === "approved" && !alreadyNotified) {
             notifiedPermissionsRef.current.add(p.id);
-            if (p.status === "approved") {
-              confirm({
-                title: "Permission approved",
-                message: `You can now edit or delete "${p.expense.description}".`,
-                mode: "alert",
-              });
-            } else {
-              confirm({
-                title: "Permission denied",
-                message: `The expense creator declined your request to edit "${p.expense.description}".`,
-                mode: "alert",
-              });
-            }
+            await confirm({
+              title: "Permission approved",
+              message: `You can now edit or delete "${p.expense.description}".`,
+              mode: "alert",
+            });
+            fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
+          } else if (p.status === "denied" && !alreadyNotified) {
+            notifiedPermissionsRef.current.add(p.id);
+            await confirm({
+              title: "Permission denied",
+              message: `The expense creator declined your request to edit "${p.expense.description}".`,
+              mode: "alert",
+            });
+            fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
+            // Denied rows get deleted server-side once acknowledged — drop it
+            // from local state too so the button reverts to "Request edit access"
+            delete map[p.expenseId];
+            delete idMap[p.expenseId];
           }
-        });
+        }
 
         setMyPermissions(map);
         setPendingRequestIds(idMap);
       });
-  }, [confirm]);
+  }, [confirm, id]);
 
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));

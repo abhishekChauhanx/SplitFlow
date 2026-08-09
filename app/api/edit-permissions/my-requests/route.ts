@@ -7,15 +7,15 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const expenseId = searchParams.get("expenseId");
+  const groupId = searchParams.get("groupId");
 
   const where: any = { requestedById: userId };
-  if (expenseId) where.expenseId = expenseId;
+  if (groupId) where.expense = { groupId };
 
   const requests = await prisma.editPermission.findMany({
     where,
     include: {
-      expense: { select: { id: true, description: true } },
+      expense: { select: { id: true, description: true, groupId: true } },
     },
     orderBy: { createdAt: "desc" },
   });

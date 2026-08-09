@@ -146,5 +146,6 @@ model EditPermission {
   owner         User     @relation("OwnedPermissions", fields: [ownerId], references: [id])
   action        String
   status        String   @default("pending")
+  notified      Boolean  @default(false)  
   createdAt     DateTime @default(now())
 }
