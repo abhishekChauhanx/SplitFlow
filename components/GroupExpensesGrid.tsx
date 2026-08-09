@@ -46,11 +46,11 @@ export default function GroupExpensesGrid({
         contributors:
           e.payments && e.payments.length > 1
             ? e.payments
-                .map(
-                  (p: any) =>
-                    `${p.user?.name || p.user?.email || "someone"}: ₹${(p.amountPaise / 100).toFixed(2)}`
-                )
-                .join(" · ")
+              .map(
+                (p: any) =>
+                  `${p.user?.name || p.user?.email || "someone"}: ₹${(p.amountPaise / 100).toFixed(2)}`
+              )
+              .join(" · ")
             : "—",
         splitType: e.splitType,
         createdAt: e.createdAt,
@@ -62,11 +62,12 @@ export default function GroupExpensesGrid({
 
   const columnDefs = useMemo<ColDef<ExpenseRow>[]>(
     () => [
-      { headerName: "Description", field: "description", flex: 2, minWidth: 160, enableValue: false },
+      { headerName: "Description", field: "description", cellDataType: "text", flex: 2, minWidth: 160, enableValue: false },
       {
         headerName: "Amount",
         field: "amountRupees",
         type: "numericColumn",
+        cellDataType: "number",
         valueFormatter: currencyFormatter,
         minWidth: 120,
       },
