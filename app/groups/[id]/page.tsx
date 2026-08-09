@@ -9,6 +9,7 @@ import PageLoader from "@/components/PageLoader";
 import { useModal } from "@/components/ModalProvider";
 import GroupSummaryCards from "@/components/GroupSummaryCards";
 import GroupExpensesGrid from "@/components/GroupExpensesGrid";
+import NotificationBell from "@/components/NotificationBell";
 import type { GroupSummary } from "@/lib/group-summary";
 
 export default function GroupDetailPage() {
@@ -435,6 +436,13 @@ export default function GroupDetailPage() {
     }
   }
 
+  function openEditModal(expense: any) {
+    setEditingExpense(expense.id);
+    setEditDesc(expense.description);
+    setEditAmount((expense.amountPaise / 100).toString());
+    setEditPaidById(expense.paidById);
+  }
+
   return (
     <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
       {(() => {
@@ -471,9 +479,16 @@ export default function GroupDetailPage() {
         ← Back to dashboard
       </Link>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
-        <h1 style={{ margin: 0 }}>Group</h1>
-        <RefreshButton onRefresh={refreshAll} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h1 style={{ margin: 0 }}>Group</h1>
+          <RefreshButton onRefresh={refreshAll} />
+        </div>
+        <NotificationBell
+          requests={pendingRequests}
+          onApprove={(reqId) => respondToRequest(reqId, "approved")}
+          onDeny={(reqId) => respondToRequest(reqId, "denied")}
+        />
       </div>
 
       <Link href={`/groups/${id}/balances`}>View balances</Link>
@@ -481,38 +496,6 @@ export default function GroupDetailPage() {
       <Link href={`/groups/${id}/settle`}>Settle up</Link>
       {" | "}
       <Link href={`/groups/${id}/recurring`}>Recurring expenses</Link>
-
-      {/* ── Owner: pending permission requests ── */}
-      {pendingRequests.length > 0 && (
-        <div style={{ marginTop: 16, padding: 12, background: "#1a1a0a", border: "1px solid #f59e0b", borderRadius: 8 }}>
-          <h3 style={{ margin: "0 0 8px", color: "#f59e0b" }}>
-            📋 Edit permission requests ({pendingRequests.length})
-          </h3>
-          {pendingRequests.map((req) => (
-            <div key={req.id} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: "1px solid #333" }}>
-              <p style={{ margin: "0 0 6px" }}>
-                <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
-                <strong>{req.action}</strong> expense:{" "}
-                <em>"{req.expense.description}" — ₹{(req.expense.amountPaise / 100).toFixed(2)}</em>
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => respondToRequest(req.id, "approved")}
-                  style={{ background: "#16a34a", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: "pointer" }}
-                >
-                  ✓ Approve
-                </button>
-                <button
-                  onClick={() => respondToRequest(req.id, "denied")}
-                  style={{ background: "#dc2626", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: "pointer" }}
-                >
-                  ✗ Deny
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       <h2>Members</h2>
       <ul>
@@ -629,43 +612,142 @@ export default function GroupDetailPage() {
         myPermissions={myPermissions}
         deletingExpenseId={deletingExpenseId}
         requestingPermissionId={requestingPermissionId}
-        onEdit={(expense) => {
-          setEditingExpense(expense.id);
-          setEditDesc(expense.description);
-          setEditAmount((expense.amountPaise / 100).toString());
-          setEditPaidById(expense.paidById);
-        }}
+        onEdit={openEditModal}
         onDelete={deleteExpense}
         onRequestAccess={(expenseId) => requestEditPermission(expenseId, "edit")}
       />
 
+      {/* Edit expense — rendered as a centered modal dialog, matching ModalProvider's style */}
       {editingExpense && (
         <div
+          onClick={() => !savingEdit && setEditingExpense(null)}
           style={{
-            marginTop: 16,
-            padding: 12,
-            background: "#161616",
-            border: "1px solid #2a2a2a",
-            borderRadius: 8,
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 3000,
           }}
         >
-          <h3 style={{ margin: "0 0 8px" }}>Edit expense</h3>
-          <input value={editDesc} onChange={(ev) => setEditDesc(ev.target.value)} />
-          <input type="number" value={editAmount} onChange={(ev) => setEditAmount(ev.target.value)} />
-          <select value={editPaidById} onChange={(ev) => setEditPaidById(ev.target.value)}>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.user.name || m.user.email}
-              </option>
-            ))}
-          </select>
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => saveEditExpense(editingExpense)} disabled={savingEdit}>
-              {savingEdit ? <Spinner /> : "Save"}
-            </button>
-            <button onClick={() => setEditingExpense(null)} disabled={savingEdit} style={{ marginLeft: 8 }}>
-              Cancel
-            </button>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(400px, 90vw)",
+              borderRadius: 10,
+              overflow: "hidden",
+              border: "1px solid #333",
+              boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+              background: "#161616",
+            }}
+          >
+            {/* ── Title bar ── */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "12px 16px",
+                background: "linear-gradient(180deg, #232323 0%, #1a1a1a 100%)",
+                borderBottom: "1px solid #2a2a2a",
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: "#2563eb",
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  flexShrink: 0,
+                }}
+              >
+                ✎
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 600, color: "#eee" }}>
+                Edit expense
+              </span>
+            </div>
+
+            {/* ── Body ── */}
+            <div style={{ padding: "16px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <input
+                value={editDesc}
+                onChange={(ev) => setEditDesc(ev.target.value)}
+                placeholder="Description"
+                style={{ width: "100%" }}
+              />
+              <input
+                type="number"
+                value={editAmount}
+                onChange={(ev) => setEditAmount(ev.target.value)}
+                placeholder="Amount (₹)"
+                style={{ width: "100%" }}
+              />
+              <select
+                value={editPaidById}
+                onChange={(ev) => setEditPaidById(ev.target.value)}
+                style={{ width: "100%" }}
+              >
+                {members.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.user.name || m.user.email}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* ── Footer ── */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 8,
+                padding: "12px 16px",
+                background: "#141414",
+                borderTop: "1px solid #2a2a2a",
+              }}
+            >
+              <button
+                onClick={() => setEditingExpense(null)}
+                disabled={savingEdit}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "1px solid #444",
+                  background: "transparent",
+                  color: "#ccc",
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => saveEditExpense(editingExpense)}
+                disabled={savingEdit}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#2563eb",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontSize: 13,
+                }}
+              >
+                {savingEdit ? <Spinner /> : "Save"}
+              </button>
+            </div>
           </div>
         </div>
       )}
