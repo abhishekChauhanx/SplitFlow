@@ -149,3 +149,14 @@ model EditPermission {
   notified      Boolean  @default(false)  
   createdAt     DateTime @default(now())
 }
+
+model PaymentReminder {
+  id          String   @id @default(cuid())
+  groupId     String
+  fromUserId  String   // person being reminded — owes the money
+  toUserId    String   // person who sent the reminder — is owed the money
+  amountPaise Int
+  sentAt      DateTime @default(now())
+
+  @@index([groupId, fromUserId, toUserId, sentAt])
+}
