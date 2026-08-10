@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import QRCode from "qrcode";
-import PageLoader from "@/components/PageLoader";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
 import { useModal } from "@/components/ModalProvider";
@@ -380,7 +380,7 @@ export default function SettlePage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "40px auto", padding: "0 16px" }}>
-      {initialLoading && <PageLoader label="Loading settle up" />}
+      <SFLoaderOverlay visible={initialLoading} label="Loading settle up" />
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <Link
@@ -404,7 +404,7 @@ export default function SettlePage() {
           ←
         </Link>
         <h1 style={{ margin: 0, fontSize: 22 }}>Settle up</h1>
-        <RefreshButton onRefresh={refreshAll} />
+        <RefreshButton onRefresh={refreshAll} label="Refreshing settlement info" />
       </div>
 
       {!initialLoading && suggestions.length === 0 && (

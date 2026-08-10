@@ -1,0 +1,102 @@
+/* ═══════════════════════════════════════
+   SFLoader.css  — only static styles,
+   NO animation here (handled in SVG)
+   ═══════════════════════════════════════ */
+
+.sf-loader-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sf-loader-svg {
+  display: block;
+}
+
+/* background */
+.sf-bg {
+  fill: transparent;
+}
+
+/* outer decorative border (kept invisible by default like the source — flip on if wanted) */
+.sf-border-outer {
+  fill: none;
+  stroke: #c8a96e;
+  stroke-width: 0.8;
+  opacity: 0;
+}
+
+/* inner static dim track */
+.sf-border-inner {
+  fill: none;
+  stroke: #c8a96e;
+  stroke-width: 0.8;
+  opacity: 0.25;
+}
+
+/* animated border — stroke-dasharray/offset set in TSX as SVG attrs */
+.sf-border-animated {
+  fill: none;
+  stroke: #c8a96e;
+  stroke-width: 1;
+  stroke-linecap: butt;
+}
+
+/* label */
+.sf-label {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  fill: #c8a96e;
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+/* dots */
+.sf-dot-tl,
+.sf-dot-br {
+  fill: #c8a96e;
+}
+
+/* ── Full-screen overlay ── */
+.sf-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  background: rgba(10, 9, 6, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.sf-overlay.sf-overlay--visible {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.sf-overlay-text {
+  font-family: "DM Mono", monospace;
+  font-size: 0.65rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #c8a96e;
+  opacity: 0.7;
+  margin: 0;
+}
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .sf-border-animated {
+    opacity: 1;
+  }
+  .sf-dot-tl,
+  .sf-dot-br {
+    opacity: 1;
+  }
+}

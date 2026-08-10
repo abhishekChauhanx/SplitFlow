@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
-import PageLoader from "@/components/PageLoader";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 
 type Balance = {
   userId: string;
@@ -144,16 +144,10 @@ export default function BalancesPage() {
     } ${formatAmount(amountPaise)}`;
   }
 
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-white text-gray-900">
-        <PageLoader label="Loading balances" />
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-white text-gray-900">
+      <SFLoaderOverlay visible={loading} label="Loading balances" />
+
       <div className="mx-auto w-full max-w-xl px-4 py-10">
         {/* Header */}
         <div className="mb-8">
@@ -161,7 +155,7 @@ export default function BalancesPage() {
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
               Who owes what
             </h1>
-            <RefreshButton onRefresh={loadData} />
+            <RefreshButton onRefresh={loadData} label="Refreshing balances" />
           </div>
 
           <div className="mt-3 flex items-center gap-2 text-sm">
@@ -378,7 +372,7 @@ export default function BalancesPage() {
         {/* NO DATA */}
         {/* ============================= */}
 
-        {balances.length === 0 && (
+        {!loading && balances.length === 0 && (
           <div className="mt-6 rounded-xl border border-gray-200 p-5 text-sm text-gray-500">
             No balance information available.
           </div>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
-import PageLoader from "@/components/PageLoader";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 import { useModal } from "@/components/ModalProvider";
 import UserAvatarMenu from "@/components/UserAvatarMenu";
 import TableOverlay from "@/components/TableOverlay";
@@ -93,14 +93,15 @@ export default function DashboardPage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
-      {(initialLoading || creatingGroup) && (
-        <PageLoader label={creatingGroup ? "Creating group" : "Loading your groups"} />
-      )}
+      <SFLoaderOverlay
+        visible={initialLoading || creatingGroup}
+        label={creatingGroup ? "Creating group" : "Loading your groups"}
+      />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ margin: 0 }}>Your groups</h1>
-          <RefreshButton onRefresh={refreshAll} />
+          <RefreshButton onRefresh={refreshAll} label="Refreshing your groups" />
         </div>
 
         <UserAvatarMenu
