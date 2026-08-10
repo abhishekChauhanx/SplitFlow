@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
-import PageLoader from "@/components/PageLoader";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 import { useModal } from "@/components/ModalProvider";
 import GroupSummaryCards from "@/components/GroupSummaryCards";
 import GroupExpensesGrid from "@/components/GroupExpensesGrid";
@@ -443,37 +443,38 @@ export default function GroupDetailPage() {
     setEditPaidById(expense.paidById);
   }
 
+  // Combined visible/label logic for the overlay — one flag covers both the
+  // initial page load and any in-flight action.
+  const actionLoading =
+    addingMember ||
+    generatingInvite ||
+    addingPlaceholder ||
+    addingExpense ||
+    savingEdit ||
+    deletingExpenseId !== null ||
+    requestingPermissionId !== null;
+
+  const loaderLabel = initialLoading
+    ? "Loading group"
+    : addingMember
+    ? "Adding member"
+    : generatingInvite
+    ? "Generating invite link"
+    : addingPlaceholder
+    ? "Adding placeholder"
+    : addingExpense
+    ? "Saving expense"
+    : savingEdit
+    ? "Saving changes"
+    : deletingExpenseId !== null
+    ? "Deleting expense"
+    : requestingPermissionId !== null
+    ? "Sending request"
+    : "";
+
   return (
     <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
-      {(() => {
-        const actionLoading =
-          addingMember ||
-          generatingInvite ||
-          addingPlaceholder ||
-          addingExpense ||
-          savingEdit ||
-          deletingExpenseId !== null ||
-          requestingPermissionId !== null;
-
-        if (initialLoading) return <PageLoader label="Loading group" />;
-        if (actionLoading) {
-          const label = addingMember
-            ? "Adding member"
-            : generatingInvite
-            ? "Generating invite link"
-            : addingPlaceholder
-            ? "Adding placeholder"
-            : addingExpense
-            ? "Saving expense"
-            : savingEdit
-            ? "Saving changes"
-            : deletingExpenseId !== null
-            ? "Deleting expense"
-            : "Sending request";
-          return <PageLoader label={label} />;
-        }
-        return null;
-      })()}
+      <SFLoaderOverlay visible={initialLoading || actionLoading} label={loaderLabel} />
 
       <Link href="/dashboard" style={{ fontSize: 14, color: "#888" }}>
         ← Back to dashboard
@@ -482,7 +483,7 @@ export default function GroupDetailPage() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ margin: 0 }}>Group</h1>
-          <RefreshButton onRefresh={refreshAll} />
+          <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
         </div>
         <NotificationBell
           requests={pendingRequests}

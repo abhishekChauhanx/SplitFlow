@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -54,6 +55,11 @@ export default function LoginPage() {
 
   return (
     <div style={{ maxWidth: 360, margin: "80px auto", padding: "0 16px" }}>
+      <SFLoaderOverlay
+        visible={loading}
+        label={step === "email" ? "Sending code" : "Verifying code"}
+      />
+
       <h1>Sign in</h1>
 
       {step === "email" && (

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -38,6 +39,8 @@ export default function OnboardingPage() {
 
   return (
     <div style={{ maxWidth: 360, margin: "80px auto", padding: "0 16px" }}>
+      <SFLoaderOverlay visible={loading} label="Saving your details" />
+
       <h1>Tell us about you</h1>
       {next && (
         <p style={{ color: "#888", fontSize: 13 }}>
