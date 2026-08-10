@@ -36,6 +36,8 @@ export default function SettlePage() {
   const [markingPaidIndex, setMarkingPaidIndex] = useState<number | null>(null);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [disputingId, setDisputingId] = useState<string | null>(null);
+  // Tracks an in-flight reopen/forgive action on a disputed settlement
+  const [resolving, setResolving] = useState<{ id: string; action: "reopen" | "forgive" } | null>(null);
 
   async function generateQr(index: number, s: any, amountPaiseOverride?: number) {
     if (!s.toUpiId) return;
@@ -279,6 +281,64 @@ export default function SettlePage() {
       await loadHistory();
     } finally {
       setDisputingId(null);
+    }
+  }
+
+  // Resets a disputed settlement back to pending so the payer can retry.
+  // Either side can do this — it's a mutual "let's just redo this" action.
+  async function reopenSettlement(h: any) {
+    const ok = await confirm({
+      title: "Reopen this settlement?",
+      message: `This resets it back to pending so ${h.fromName} can try the payment again. The existing UTR and confirmations will be cleared.`,
+      confirmLabel: "Reopen",
+    });
+    if (!ok) return;
+
+    setResolving({ id: h.id, action: "reopen" });
+    try {
+      const res = await fetch(`/api/settlements/${h.id}/dispute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: h.disputeReason, resolution: "reopen" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        await confirm({ title: "Couldn't reopen", message: data.error || "Something went wrong.", mode: "alert" });
+        return;
+      }
+      await Promise.all([loadHistory(), loadSuggestions()]);
+    } finally {
+      setResolving(null);
+    }
+  }
+
+  // Only the payee can forgive — settles it as both_confirmed despite the
+  // disagreement. Requires typing a reason so there's a record of why.
+  async function forgiveSettlement(h: any) {
+    const reason = await prompt({
+      title: "Mark as resolved anyway?",
+      message: "Why are you forgiving this dispute? This settles it despite the disagreement.",
+      placeholder: "e.g. sorted it out in person",
+      confirmLabel: "Forgive & settle",
+      required: true,
+    });
+    if (!reason) return;
+
+    setResolving({ id: h.id, action: "forgive" });
+    try {
+      const res = await fetch(`/api/settlements/${h.id}/dispute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason, resolution: "forgive" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        await confirm({ title: "Couldn't forgive dispute", message: data.error || "Something went wrong.", mode: "alert" });
+        return;
+      }
+      await Promise.all([loadHistory(), loadSuggestions()]);
+    } finally {
+      setResolving(null);
     }
   }
 
@@ -762,6 +822,7 @@ export default function SettlePage() {
             const isConfirming = confirmingId === h.id;
             const isDisputing = disputingId === h.id;
             const isSavingUtr = savingUtr === h.id;
+            const isResolving = resolving?.id === h.id;
             // Has *my* side already confirmed? Relies on payerConfirmedAt / payeeConfirmedAt
             // being returned by the settlement-history API for each row.
             const myConfirmed = isPayer ? !!h.payerConfirmedAt : !!h.payeeConfirmedAt;
@@ -839,7 +900,7 @@ export default function SettlePage() {
                       <button
                         onClick={() => saveUtr(h.id)}
                         disabled={isSavingUtr || !utrInputs[h.id]}
-                        className="text-xs px-2.5 py-1.5 whitespace-nowrap"
+                        className="text-xs px-2.5 py-1.5"
                       >
                         {isSavingUtr ? <Spinner /> : "Save"}
                       </button>
@@ -849,9 +910,30 @@ export default function SettlePage() {
                   </div>
                 )}
 
-                {h.status === "disputed" && h.disputeReason && (
-                  <div className="px-2.5 py-1.5 bg-[#2a0a0a] rounded-md border border-[#7f1d1d]">
-                    <span className="text-[#f87171] text-[13px]">⚠ {h.disputeReason}</span>
+                {/* Disputed: reason + resolution actions */}
+                {h.status === "disputed" && (
+                  <div className="px-2.5 py-1.5 bg-[#2a0a0a] rounded-md border border-[#7f1d1d] flex flex-col gap-2">
+                    {h.disputeReason && (
+                      <span className="text-[#f87171] text-[13px]">⚠ {h.disputeReason}</span>
+                    )}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => reopenSettlement(h)}
+                        disabled={isResolving}
+                        className="text-xs px-2.5 py-1.5"
+                      >
+                        {isResolving && resolving?.action === "reopen" ? <Spinner /> : "🔄 Reopen"}
+                      </button>
+                      {h.toUserId === currentUserId && (
+                        <button
+                          onClick={() => forgiveSettlement(h)}
+                          disabled={isResolving}
+                          className="text-xs px-2.5 py-1.5"
+                        >
+                          {isResolving && resolving?.action === "forgive" ? <Spinner /> : "✓ Mark resolved anyway"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 

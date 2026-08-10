@@ -14,8 +14,8 @@ export default function GroupsSummaryGrid({ rows }: { rows: GroupSummaryRow[] })
       {
         headerName: "Group name",
         field: "groupName",
+        cellDataType: "text",
         pinned: "left",
-        enableValue: false,
         minWidth: 160,
         cellRenderer: (params: any) => (
           <a
@@ -30,21 +30,29 @@ export default function GroupsSummaryGrid({ rows }: { rows: GroupSummaryRow[] })
           </a>
         ),
       },
-      { headerName: "My role", field: "myRole", width: 110, enableValue: false },
-      { headerName: "Members", field: "totalMembers", width: 100, type: "numericColumn" },
-      { headerName: "Total spending", field: "groupTotalSpending", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 150 },
-      { headerName: "I paid", field: "iPaid", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 130 },
-      { headerName: "My fair share", field: "myFairShare", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 140 },
-      { headerName: "Owed to me", field: "owedToMe", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 130 },
-      { headerName: "I still owe", field: "iStillOwe", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 130 },
-      { headerName: "Settled", field: "settledAmount", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 120 },
-      { headerName: "Pending", field: "pendingAmount", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 120 },
-      { headerName: "Disputed", field: "disputedAmount", type: "numericColumn", valueFormatter: currencyFormatter, minWidth: 120 },
-      { headerName: "Expenses", field: "totalExpenses", width: 110, type: "numericColumn" },
-      { headerName: "Last activity", field: "lastActivity", valueFormatter: relativeDateFormatter, minWidth: 130, enableValue: false },
+      { headerName: "My role", field: "myRole", cellDataType: "text", width: 110 },
+      { headerName: "Members", field: "totalMembers", cellDataType: "number", width: 100 },
+      { headerName: "Total spending", field: "groupTotalSpending", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 150 },
+      { headerName: "I paid", field: "iPaid", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 130 },
+      { headerName: "My fair share", field: "myFairShare", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 140 },
+      { headerName: "Owed to me", field: "owedToMe", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 130 },
+      { headerName: "I still owe", field: "iStillOwe", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 130 },
+      { headerName: "Settled", field: "settledAmount", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 120 },
+      { headerName: "Pending", field: "pendingAmount", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 120 },
+      { headerName: "Disputed", field: "disputedAmount", cellDataType: "number", valueFormatter: currencyFormatter, minWidth: 120 },
+      { headerName: "Expenses", field: "totalExpenses", cellDataType: "number", width: 110 },
+      { headerName: "Last activity", field: "lastActivity", valueFormatter: relativeDateFormatter, minWidth: 130 },
     ],
     [router]
   );
 
-  return <DataGrid<GroupSummaryRow> rows={rows} columnDefs={columnDefs} getRowId={(r) => r.groupId} />;
+  return (
+    <DataGrid<GroupSummaryRow>
+      rows={rows}
+      columnDefs={columnDefs}
+      getRowId={(r) => r.groupId}
+      exportFileName="groups-summary"
+      title="Groups summary"
+    />
+  );
 }
