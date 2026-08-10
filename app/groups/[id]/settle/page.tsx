@@ -38,6 +38,8 @@ export default function SettlePage() {
   const [disputingId, setDisputingId] = useState<string | null>(null);
   // Tracks an in-flight reopen/forgive action on a disputed settlement
   const [resolving, setResolving] = useState<{ id: string; action: "reopen" | "forgive" } | null>(null);
+  // Tracks an in-flight "send reminder" action, keyed by suggestion index
+  const [remindingIndex, setRemindingIndex] = useState<number | null>(null);
 
   async function generateQr(index: number, s: any, amountPaiseOverride?: number) {
     if (!s.toUpiId) return;
@@ -342,6 +344,36 @@ export default function SettlePage() {
     }
   }
 
+  // Sends a nudge email to whoever owes money on this suggestion. Only shown
+  // to the payee (the person who's owed), and only while nothing is already
+  // pending confirmation for that pair. The server independently recomputes
+  // the real debt and enforces a cooldown — this button just triggers it.
+  async function sendReminder(index: number, s: any) {
+    const ok = await confirm({
+      title: "Send reminder?",
+      message: `Send a reminder email to ${s.fromName} about the ₹${(s.amountPaise / 100).toFixed(2)} they owe you.`,
+      confirmLabel: "Send reminder",
+    });
+    if (!ok) return;
+
+    setRemindingIndex(index);
+    try {
+      const res = await fetch(`/api/groups/${id}/remind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remindUserId: s.fromUserId, amountPaise: s.amountPaise }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        await confirm({ title: "Couldn't send reminder", message: data.error || "Something went wrong.", mode: "alert" });
+        return;
+      }
+      await confirm({ title: "Reminder sent", message: `${s.fromName} has been emailed a reminder.`, mode: "alert" });
+    } finally {
+      setRemindingIndex(null);
+    }
+  }
+
   const activeIndex = payDialog?.index ?? null;
   const activeSuggestion = activeIndex != null ? suggestions[activeIndex] : null;
   const isPayMode = payDialog?.mode === "pay";
@@ -397,7 +429,9 @@ export default function SettlePage() {
         <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10 }}>
           {suggestions.map((s, i) => {
             const isPayer = currentUserId === s.fromUserId;
+            const isPayee = currentUserId === s.toUserId;
             const pending = pendingSettlementFor(s.fromUserId, s.toUserId);
+            const isReminding = remindingIndex === i;
 
             return (
               <div
@@ -424,6 +458,24 @@ export default function SettlePage() {
                     <div style={{ fontSize: 11.5, color: "#f59e0b", marginTop: 3 }}>
                       No UPI ID added — cash only
                     </div>
+                  )}
+                  {isPayee && !pending && (
+                    <button
+                      onClick={() => sendReminder(i, s)}
+                      disabled={isReminding}
+                      style={{
+                        marginTop: 6,
+                        background: "transparent",
+                        border: "none",
+                        color: "#f59e0b",
+                        fontSize: 12,
+                        cursor: isReminding ? "default" : "pointer",
+                        padding: 0,
+                        opacity: isReminding ? 0.7 : 1,
+                      }}
+                    >
+                      {isReminding ? <Spinner size={11} /> : `📩 Remind ${s.fromName}`}
+                    </button>
                   )}
                 </div>
 
