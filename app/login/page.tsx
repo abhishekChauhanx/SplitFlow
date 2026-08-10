@@ -64,16 +64,9 @@ export default function LoginPage() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-         <button
-  type="button"
-  onClick={() => {
-    alert("BUTTON CLICKED");
-    handleSendOtp();
-  }}
-  disabled={loading || !email}
->
-  {loading ? "Sending..." : "Send code"}
-</button>
+          <button onClick={handleSendOtp} disabled={loading || !email}>
+            {loading ? "Sending..." : "Send code"}
+          </button>
         </>
       )}
 
@@ -85,7 +78,7 @@ export default function LoginPage() {
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
           />
-          <button onClick={handleVerifyOtp} disabled={loading || !otp} type="button">
+          <button onClick={handleVerifyOtp} disabled={loading || !otp}>
             {loading ? "Verifying..." : "Verify"}
           </button>
         </>
