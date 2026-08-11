@@ -192,6 +192,9 @@ export default function GroupDetailPage() {
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [addingPlaceholder, setAddingPlaceholder] = useState(false);
   const [addingExpense, setAddingExpense] = useState(false);
+  // Lets the overlay say "Saving expense" vs. "Merging "food"" depending on
+  // which branch of addExpense() is running, instead of a single fixed label.
+  const [addingExpenseLabel, setAddingExpenseLabel] = useState("Saving expense");
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [requestingPermissionId, setRequestingPermissionId] = useState<string | null>(null);
@@ -297,7 +300,23 @@ export default function GroupDetailPage() {
       }
     }, 8000);
 
-    return () => clearInterval(interval);
+    // Refetch balances/expenses immediately when the user comes back to this
+    // tab/page (e.g. after settling a payment on /settle and navigating
+    // back) instead of waiting for the next poll tick or a full remount.
+    function handleFocusOrVisible() {
+      if (document.visibilityState === "visible") {
+        loadSummary();
+        loadExpenses();
+      }
+    }
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
   }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions]);
 
   const refreshAll = useCallback(async () => {
@@ -474,6 +493,13 @@ export default function GroupDetailPage() {
   // d) & f) Add expense — duplicate/merge warnings shown as modals, adds loading.
   // Now triggered from the "Add expense" dialog's OK button instead of an
   // inline "are you sure" confirm — the dialog itself is the confirmation step.
+  //
+  // Loader handling: the overlay is shown while the create call is checking
+  // for a duplicate/merge candidate, then hidden the instant we know we need
+  // to ask the user something (409 response) so it never overlaps the
+  // "Merge expense?" / "Possible duplicate" confirm dialogs. It's switched
+  // back on — with a merge-specific label — only once the user actually
+  // confirms and the real save/merge request goes out.
   async function addExpense(confirmDuplicate = false, confirmMerge = false) {
     if (!confirmDuplicate && !confirmMerge) {
       if (!description.trim() || !amount) return;
@@ -481,6 +507,9 @@ export default function GroupDetailPage() {
 
     setError(null);
     setAddingExpense(true);
+    setAddingExpenseLabel(
+      confirmMerge ? `Merging "${description.trim()}"` : "Saving expense"
+    );
     try {
       const amountPaise = Math.round(parseFloat(amount) * 100);
 
@@ -508,6 +537,11 @@ export default function GroupDetailPage() {
 
       if (res.status === 409) {
         const data = await res.json();
+        // Duplicate/merge check is done — nothing is being saved yet, so
+        // drop the loader before the confirm dialog opens instead of
+        // stacking them.
+        setAddingExpense(false);
+
         if (data.mergeCandidate) {
           const ok = await confirm({
             title: "Merge expense?",
@@ -624,7 +658,7 @@ export default function GroupDetailPage() {
     : addingPlaceholder
     ? "Adding placeholder"
     : addingExpense
-    ? "Saving expense"
+    ? addingExpenseLabel
     : savingEdit
     ? "Saving changes"
     : deletingExpenseId !== null
