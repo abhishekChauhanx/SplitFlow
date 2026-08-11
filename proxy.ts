@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
+import { prisma } from "@/lib/prisma";
 
 const secret = new TextEncoder().encode(process.env.JWT_SECRET);
 
@@ -8,12 +9,30 @@ export async function proxy(req: NextRequest) {
   const token = req.cookies.get("session")?.value;
 
   let isValidSession = false;
+  let userId: string | null = null;
+
   if (token) {
     try {
-      await jwtVerify(token, secret);
+      const { payload } = await jwtVerify(token, secret);
+      userId = payload.userId as string;
       isValidSession = true;
     } catch {
       isValidSession = false;
+    }
+  }
+
+  // Check if account was deleted — block even valid sessions
+  if (isValidSession && userId && !pathname.startsWith("/account-deleted")) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { isDeleted: true },
+      });
+      if (user?.isDeleted) {
+        return NextResponse.redirect(new URL("/account-deleted", req.url));
+      }
+    } catch {
+      // If DB check fails, don't block — fail open
     }
   }
 
@@ -22,10 +41,10 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
-  // Public paths — don't require login
   const isPublic =
     pathname === "/login" ||
-    pathname.startsWith("/join/"); // invite pages are public
+    pathname === "/account-deleted" ||
+    pathname.startsWith("/join/");
 
   if (!isPublic && !isValidSession) {
     const loginUrl = new URL("/login", req.url);

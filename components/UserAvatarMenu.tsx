@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 
 function getInitials(name?: string | null, email?: string | null) {
   const source = (name && name.trim()) || (email && email.trim()) || "?";
@@ -86,7 +87,9 @@ export default function UserAvatarMenu({
           >
             Information
           </button>
-
+        
+            <Link href="/account" style={{ fontSize: 13, color: "#888" }}>Account</Link>
+        
           <button
             onClick={() => {
               setOpen(false);
