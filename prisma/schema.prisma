@@ -7,29 +7,32 @@ datasource db {
 }
 
 model User {
-  id            String        @id @default(cuid())
-  email         String?       @unique
-  name          String?
-  phone         String?
-  upiId         String?
-  isPlaceholder Boolean       @default(false)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-  groups        GroupMember[]
-  expensesPaid  Expense[]     @relation("PaidBy")
-  splits        ExpenseSplit[]
-  editPermissionsRequested EditPermission[] @relation("RequestedPermissions")
-  editPermissionsOwned     EditPermission[] @relation("OwnedPermissions")
-  createdExpensesOwned     Expense[]        @relation("CreatedExpenses")
-  expensePayments          ExpensePayment[] @relation("ExpensePayments")
+  id                       String             @id @default(cuid())
+  email                    String?            @unique
+  name                     String?
+  phone                    String?
+  upiId                    String?
+  isPlaceholder            Boolean            @default(false)
+  isDeleted                Boolean            @default(false)
+  deletedAt                DateTime?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  groups                   GroupMember[]
+  expensesPaid             Expense[]          @relation("PaidBy")
+  createdExpenses          Expense[]          @relation("CreatedExpenses") // NEW - fixes createdBy error
+  splits                   ExpenseSplit[]
+  editPermissionsRequested EditPermission[]   @relation("RequestedPermissions")
+  editPermissionsOwned     EditPermission[]   @relation("OwnedPermissions")
+  pushSubscriptions        PushSubscription[] // already had opposite issue - see below
+  expensePayments          ExpensePayment[]   @relation("ExpensePayments") // NEW - fixes user error
 }
 
 model GroupInvite {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   groupId   String
-  group     Group    @relation(fields: [groupId], references: [id])
-  token     String   @unique @default(cuid())
-  createdAt DateTime @default(now())
+  group     Group     @relation(fields: [groupId], references: [id])
+  token     String    @unique @default(cuid())
+  createdAt DateTime  @default(now())
   expiresAt DateTime
   usedAt    DateTime?
 }
@@ -51,13 +54,13 @@ model Expense {
   amountPaise     Int
   paidBy          User             @relation("PaidBy", fields: [paidById], references: [id])
   paidById        String
-  createdBy       User             @relation("CreatedExpenses", fields: [createdById], references: [id])   // NEW
-  createdById     String                                                                                     // NEW
+  createdBy       User             @relation("CreatedExpenses", fields: [createdById], references: [id]) // NEW
+  createdById     String // NEW
   splitType       SplitType
   createdAt       DateTime         @default(now())
   splits          ExpenseSplit[]
   editPermissions EditPermission[]
-  payments        ExpensePayment[]                                                                           // NEW
+  payments        ExpensePayment[] // NEW
 }
 
 model ExpensePayment {
@@ -87,6 +90,7 @@ enum SplitType {
   SHARES
   PERCENTAGE
 }
+
 model GroupMember {
   id       String   @id @default(cuid())
   group    Group    @relation(fields: [groupId], references: [id])
@@ -107,30 +111,28 @@ model OtpCode {
 }
 
 model Settlement {
-  id                String    @id @default(cuid())
-  groupId           String
-  fromUserId        String
-  toUserId          String
-  amountPaise       Int
-  status            String    @default("pending") // pending | payer_confirmed | both_confirmed | disputed
+  id               String    @id @default(cuid())
+  groupId          String
+  fromUserId       String
+  toUserId         String
+  amountPaise      Int
+  status           String    @default("pending") // pending | payer_confirmed | both_confirmed | disputed
   paymentMethod    String    @default("upi") // "upi" | "cash"
   utrNumber        String?
-  payerConfirmedAt  DateTime?
-  payeeConfirmedAt  DateTime?
-  disputeReason     String?
-  createdAt         DateTime  @default(now())
+  payerConfirmedAt DateTime?
+  payeeConfirmedAt DateTime?
+  disputeReason    String?
+  createdAt        DateTime  @default(now())
 }
 
-
-
 model RecurringTemplate {
-  id            String   @id @default(cuid())
+  id            String    @id @default(cuid())
   groupId       String
   description   String
   amountPaise   Int
   splitType     SplitType
-  shareUnits    Json?     // e.g. { "userId1": 20, "userId2": 12 } — meal counts, only used when splitType = SHARES
-  frequencyDays Int       // e.g. 30 for monthly, 7 for weekly
+  shareUnits    Json? // e.g. { "userId1": 20, "userId2": 12 } — meal counts, only used when splitType = SHARES
+  frequencyDays Int // e.g. 30 for monthly, 7 for weekly
   nextRunAt     DateTime
   active        Boolean   @default(true)
   createdAt     DateTime  @default(now())
@@ -146,15 +148,15 @@ model EditPermission {
   owner         User     @relation("OwnedPermissions", fields: [ownerId], references: [id])
   action        String
   status        String   @default("pending")
-  notified      Boolean  @default(false)  
+  notified      Boolean  @default(false)
   createdAt     DateTime @default(now())
 }
 
 model PaymentReminder {
   id          String   @id @default(cuid())
   groupId     String
-  fromUserId  String   // person being reminded — owes the money
-  toUserId    String   // person who sent the reminder — is owed the money
+  fromUserId  String // person being reminded — owes the money
+  toUserId    String // person who sent the reminder — is owed the money
   amountPaise Int
   sentAt      DateTime @default(now())
 
@@ -164,6 +166,7 @@ model PaymentReminder {
 model PushSubscription {
   id        String   @id @default(cuid())
   userId    String
+  user      User     @relation(fields: [userId], references: [id]) // NEW - fixes pushSubscriptions error
   endpoint  String   @unique
   p256dh    String
   auth      String
