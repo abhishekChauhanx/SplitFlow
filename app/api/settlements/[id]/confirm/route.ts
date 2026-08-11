@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
-
+import { sendPushToUser } from "@/lib/webpush";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const userId = await getSessionUserId();
@@ -41,6 +41,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     where: { id },
     data: updateData,
   });
+const notifyUserId = isPayer ? settlement.toUserId : settlement.fromUserId;
+const message = updated.status === "both_confirmed"
+  ? "Both sides confirmed — settlement complete! ✓"
+  : isPayer
+    ? "Payer confirmed — please confirm on your side to complete."
+    : "Payee confirmed — waiting for payer to confirm.";
 
+await sendPushToUser(notifyUserId, {
+  title: "Settlement update",
+  body: message,
+  url: `/groups/${settlement.groupId}/settle`,
+}).catch(() => {});
   return NextResponse.json(updated);
 }

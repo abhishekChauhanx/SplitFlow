@@ -160,3 +160,12 @@ model PaymentReminder {
 
   @@index([groupId, fromUserId, toUserId, sentAt])
 }
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}

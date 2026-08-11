@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
+import { sendPushToUser } from "@/lib/webpush";
 
 export async function POST(
   req: NextRequest,
@@ -28,6 +29,12 @@ export async function POST(
     where: { id: permissionId },
     data: { status: decision },
   });
-
+await sendPushToUser(permission.requestedById, {
+  title: decision === "approved" ? "Edit permission approved ✓" : "Edit permission denied",
+  body: decision === "approved"
+    ? `You can now edit "${permission.expense.description}"`
+    : `Your request to edit "${permission.expense.description}" was declined`,
+  url: `/groups/${permission.expense.groupId}`,
+}).catch(() => {});
   return NextResponse.json(updated);
 }

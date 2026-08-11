@@ -11,6 +11,7 @@ import UserAvatarMenu from "@/components/UserAvatarMenu";
 import TableOverlay from "@/components/TableOverlay";
 import GroupsSummaryGrid from "@/components/GroupsSummaryGrid";
 import type { GroupSummaryRow } from "@/lib/dashboard-summary";
+import PushNotificationButton from "@/components/PushNotificationButton";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -111,7 +112,17 @@ export default function DashboardPage() {
           onLogout={handleLogout}
         />
       </div>
-
+<div style={{ marginBottom: 16 }}>
+  <PushNotificationButton />
+</div>
+{process.env.NODE_ENV === "development" && (
+  <button
+    style={{ fontSize: 12, color: "#888" }}
+    onClick={() => fetch("/api/push/test", { method: "POST" })}
+  >
+    Test notification
+  </button>
+)}
       <div style={{ display: "flex", gap: 8, margin: "16px 0 24px" }}>
         <input
           placeholder="New group name"
