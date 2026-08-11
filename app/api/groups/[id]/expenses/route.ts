@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
 import { splitEqual, splitExact, splitByPercentage, splitByShares } from "@/lib/split-logic";
-
+import { sendPushToGroup } from "@/lib/webpush";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const expenses = await prisma.expense.findMany({
@@ -159,6 +159,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     },
     include: { splits: true, payments: true },
   });
-
+await sendPushToGroup(id, userId, {
+  title: "New expense added",
+  body: `${expense.description} — ₹${(expense.amountPaise / 100).toFixed(2)}`,
+  url: `/groups/${id}`,
+}).catch(() => {}); 
   return NextResponse.json(expense);
 }
