@@ -126,16 +126,18 @@ model Settlement {
 }
 
 model RecurringTemplate {
-  id            String    @id @default(cuid())
-  groupId       String
-  description   String
-  amountPaise   Int
-  splitType     SplitType
-  shareUnits    Json? // e.g. { "userId1": 20, "userId2": 12 } — meal counts, only used when splitType = SHARES
-  frequencyDays Int // e.g. 30 for monthly, 7 for weekly
-  nextRunAt     DateTime
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
+  id                String    @id @default(cuid())
+  groupId           String
+  description       String
+  amountPaise       Int
+  splitType         SplitType
+  shareUnits        Json?
+  frequencyDays     Int
+  nextRunAt         DateTime
+  active            Boolean   @default(true)
+  pausedAt          DateTime?
+  nextCycleOverride Json?     // one-time override for next run only
+  createdAt         DateTime  @default(now())
 }
 
 model EditPermission {
