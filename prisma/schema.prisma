@@ -47,20 +47,22 @@ model Group {
 }
 
 model Expense {
-  id              String           @id @default(cuid())
-  group           Group            @relation(fields: [groupId], references: [id])
-  groupId         String
-  description     String
-  amountPaise     Int
-  paidBy          User             @relation("PaidBy", fields: [paidById], references: [id])
-  paidById        String
-  createdBy       User             @relation("CreatedExpenses", fields: [createdById], references: [id]) // NEW
-  createdById     String // NEW
-  splitType       SplitType
-  createdAt       DateTime         @default(now())
-  splits          ExpenseSplit[]
-  editPermissions EditPermission[]
-  payments        ExpensePayment[] // NEW
+  id                  String             @id @default(cuid())
+  group               Group              @relation(fields: [groupId], references: [id])
+  groupId             String
+  description         String
+  amountPaise         Int
+  paidBy              User               @relation("PaidBy", fields: [paidById], references: [id])
+  paidById            String
+  createdBy           User               @relation("CreatedExpenses", fields: [createdById], references: [id]) // NEW
+  createdById         String // NEW
+  splitType           SplitType
+  createdAt           DateTime           @default(now())
+  splits              ExpenseSplit[]
+  editPermissions     EditPermission[]
+  payments            ExpensePayment[] // NEW
+  recurringTemplateId String?
+  recurringTemplate   RecurringTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
 }
 
 model ExpensePayment {
@@ -77,7 +79,7 @@ model ExpensePayment {
 
 model ExpenseSplit {
   id              String  @id @default(cuid())
-  expense         Expense @relation(fields: [expenseId], references: [id])
+  expense         Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   expenseId       String
   user            User    @relation(fields: [userId], references: [id])
   userId          String
@@ -126,7 +128,7 @@ model Settlement {
 }
 
 model RecurringTemplate {
-  id                String    @id @default(cuid())
+  id                String     @id @default(cuid())
   groupId           String
   description       String
   amountPaise       Int
@@ -134,10 +136,11 @@ model RecurringTemplate {
   shareUnits        Json?
   frequencyDays     Int
   nextRunAt         DateTime
-  active            Boolean   @default(true)
+  active            Boolean    @default(true)
   pausedAt          DateTime?
-  nextCycleOverride Json?     // one-time override for next run only
-  createdAt         DateTime  @default(now())
+  nextCycleOverride Json? // one-time override for next run only
+  createdAt         DateTime   @default(now())
+  generatedExpenses Expense[]
 }
 
 model EditPermission {

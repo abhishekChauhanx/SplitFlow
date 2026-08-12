@@ -77,6 +77,7 @@ export async function POST() {
         createdById: payerId,
         splitType: template.splitType,
         splits: { create: splits },
+        recurringTemplateId: template.id,
       },
     });
 

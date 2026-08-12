@@ -184,6 +184,11 @@ export default function RecurringPage() {
 
   // ── Pause / resume + delete + run-now loading ──
   const [pausingId, setPausingId] = useState<string | null>(null);
+  // ── Delete template dialog state ──
+  const [deletingTemplate, setDeletingTemplate] = useState<any | null>(null);
+  const [deleteGeneratedToo, setDeleteGeneratedToo] = useState(false);
+  const [generatedCount, setGeneratedCount] = useState<number | null>(null);
+  const [loadingGeneratedCount, setLoadingGeneratedCount] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [runningNow, setRunningNow] = useState(false);
 
@@ -309,18 +314,45 @@ export default function RecurringPage() {
     }
   }
 
-  // ── Delete — confirmation dialog instead of native confirm() ──
-  async function deleteTemplate(template: any) {
-    const ok = await confirm({
-      title: "Delete this template?",
-      message: `"${template.description}" will stop generating new expenses. Past expenses it already created won't be deleted.`,
-      confirmLabel: "Delete",
-    });
-    if (!ok) return;
+  // ── Delete — opens a custom dialog (instead of a plain confirm()) so we
+  // can show how many expenses this template already generated and offer
+  // a checkbox to also delete those, rather than always keeping them.
+  async function openDeleteModal(template: any) {
+    setDeletingTemplate(template);
+    setDeleteGeneratedToo(false);
+    setGeneratedCount(null);
 
-    setDeletingId(template.id);
+    setLoadingGeneratedCount(true);
     try {
-      await fetch(`/api/groups/${id}/recurring/${template.id}`, { method: "DELETE" });
+      const res = await fetch(`/api/groups/${id}/recurring/${template.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setGeneratedCount(data.generatedExpenseCount ?? 0);
+      }
+    } finally {
+      setLoadingGeneratedCount(false);
+    }
+  }
+
+  function closeDeleteModal() {
+    if (deletingId) return;
+    setDeletingTemplate(null);
+    setDeleteGeneratedToo(false);
+    setGeneratedCount(null);
+  }
+
+  async function confirmDeleteTemplate() {
+    if (!deletingTemplate) return;
+    setDeletingId(deletingTemplate.id);
+    try {
+      await fetch(`/api/groups/${id}/recurring/${deletingTemplate.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deleteGenerated: deleteGeneratedToo }),
+      });
+      setDeletingTemplate(null);
+      setDeleteGeneratedToo(false);
+      setGeneratedCount(null);
       await load();
     } finally {
       setDeletingId(null);
@@ -443,6 +475,7 @@ export default function RecurringPage() {
     pausingId !== null ||
     deletingId !== null ||
     clearingProrateId !== null ||
+    loadingGeneratedCount ||
     runningNow;
 
   const loaderLabel = initialLoading
@@ -459,6 +492,8 @@ export default function RecurringPage() {
     ? "Deleting template"
     : clearingProrateId !== null
     ? "Clearing override"
+    : loadingGeneratedCount
+    ? "Checking template"
     : runningNow
     ? "Running due expenses"
     : "";
@@ -525,7 +560,7 @@ export default function RecurringPage() {
                 🔧 Override next cycle
               </button>
               <button
-                onClick={() => deleteTemplate(t)}
+                onClick={() => openDeleteModal(t)}
                 disabled={deletingId === t.id}
                 style={{ fontSize: 12, color: "#f87171" }}
               >
@@ -744,6 +779,63 @@ export default function RecurringPage() {
               </label>
             </div>
           ))}
+        </Dialog>
+      )}
+
+      {/* ── Delete template dialog — shows how many expenses this template
+          already generated and offers a checkbox to also delete those,
+          instead of a plain confirm() that always silently kept them. ── */}
+      {deletingTemplate && (
+        <Dialog
+          icon="🗑"
+          iconColor="#dc2626"
+          title="Delete this template?"
+          onBackdropClick={closeDeleteModal}
+          footer={
+            <>
+              <DialogButton variant="secondary" onClick={closeDeleteModal} disabled={deletingId === deletingTemplate.id}>
+                Cancel
+              </DialogButton>
+              <DialogButton onClick={confirmDeleteTemplate} disabled={deletingId === deletingTemplate.id}>
+                {deletingId === deletingTemplate.id ? <Spinner /> : "Delete"}
+              </DialogButton>
+            </>
+          }
+        >
+          <p style={{ fontSize: 13, color: "#ccc", margin: 0 }}>
+            "{deletingTemplate.description}" will stop generating new expenses.
+          </p>
+
+          {loadingGeneratedCount ? (
+            <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Checking how many expenses this created…</p>
+          ) : generatedCount !== null && generatedCount > 0 ? (
+            <>
+              <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
+                This template has generated {generatedCount} expense{generatedCount === 1 ? "" : "s"} so far.
+              </p>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                <input
+                  type="checkbox"
+                  id="delete-generated-too"
+                  checked={deleteGeneratedToo}
+                  onChange={(e) => setDeleteGeneratedToo(e.target.checked)}
+                />
+                <label htmlFor="delete-generated-too" style={{ fontSize: 13, color: "#eee" }}>
+                  Also delete the {generatedCount} expense{generatedCount === 1 ? "" : "s"} this generated
+                </label>
+              </div>
+              {deleteGeneratedToo && (
+                <p style={{ fontSize: 11.5, color: "#f87171", margin: 0 }}>
+                  This permanently removes those expenses and their splits from the group's history — balances and
+                  settlements involving them will change.
+                </p>
+              )}
+            </>
+          ) : (
+            <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
+              This template hasn't generated any expenses yet.
+            </p>
+          )}
         </Dialog>
       )}
     </div>

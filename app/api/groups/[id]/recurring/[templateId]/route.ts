@@ -9,9 +9,12 @@ export async function GET(
   const { templateId } = await params;
   const template = await prisma.recurringTemplate.findUnique({
     where: { id: templateId },
+    include: { _count: { select: { generatedExpenses: true } } },
   });
   if (!template) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(template);
+
+  const { _count, ...rest } = template;
+  return NextResponse.json({ ...rest, generatedExpenseCount: _count.generatedExpenses });
 }
 
 export async function PATCH(
@@ -54,7 +57,19 @@ export async function DELETE(
   const { templateId } = await params;
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const body = await req.json().catch(() => ({}));
+  const deleteGenerated = body?.deleteGenerated === true;
+
+  let deletedExpenseCount = 0;
+
+  if (deleteGenerated) {
+    const { count } = await prisma.expense.deleteMany({
+      where: { recurringTemplateId: templateId },
+    });
+    deletedExpenseCount = count;
+  }
 
   await prisma.recurringTemplate.delete({ where: { id: templateId } });
-  return NextResponse.json({ ok: true });
+
+  return NextResponse.json({ ok: true, deletedExpenseCount });
 }
