@@ -28,7 +28,23 @@ const cardStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = { fontSize: 12, color: "#888", marginBottom: 6 };
 const valueStyle: React.CSSProperties = { fontSize: 17, fontWeight: 600, color: "#eee", lineHeight: 1.3 };
 
-export default function GroupSummaryCards({ summary }: { summary: GroupSummary }) {
+// Loose shape — only what this component needs from a recurring template,
+// so it doesn't have to import the full RecurringTemplateRow type from the
+// page and stays reusable even if that type grows.
+type RecurringSummaryInput = {
+  active: boolean;
+};
+
+export default function GroupSummaryCards({
+  summary,
+  recurringTemplates = [],
+}: {
+  summary: GroupSummary;
+  recurringTemplates?: RecurringSummaryInput[];
+}) {
+  const activeRecurringCount = recurringTemplates.filter((t) => t.active).length;
+  const totalRecurringCount = recurringTemplates.length;
+
   const cards = [
     { label: "Total group spending", value: formatCurrency(summary.totalGroupSpending) },
     { label: "Members", value: String(summary.memberCount) },
@@ -50,6 +66,15 @@ export default function GroupSummaryCards({ summary }: { summary: GroupSummary }
         : "—",
     },
     { label: "Average expense size", value: formatCurrency(summary.averageExpenseSize) },
+    {
+      label: "Recurring templates",
+      value:
+        totalRecurringCount === 0
+          ? "—"
+          : activeRecurringCount === totalRecurringCount
+          ? `${activeRecurringCount} active`
+          : `${activeRecurringCount} active / ${totalRecurringCount} total`,
+    },
   ];
 
   return (

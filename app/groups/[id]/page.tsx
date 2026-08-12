@@ -9,8 +9,30 @@ import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 import { useModal } from "@/components/ModalProvider";
 import GroupSummaryCards from "@/components/GroupSummaryCards";
 import GroupExpensesGrid from "@/components/GroupExpensesGrid";
+import GroupRecurringGrid from "@/components/GroupRecurringGrid";
 import NotificationBell from "@/components/NotificationBell";
 import type { GroupSummary } from "@/lib/group-summary";
+
+// Mirrors what /api/groups/[id]/recurring returns — used for the read-only
+// "Recurring expenses" summary table on the group page. Full create/edit/
+// pause/delete management still happens on the /recurring page; this table
+// just reflects current state and re-syncs automatically (see the
+// visibility/focus effect below) so a template deleted there disappears
+// here too without a manual refresh.
+type RecurringTemplateRow = {
+  id: string;
+  description: string;
+  amountPaise: number;
+  splitType: "EQUAL" | "EXACT" | "PERCENTAGE" | "SHARES";
+  frequencyDays: number;
+  active: boolean;
+  nextRunAt: string | null;
+  pausedAt: string | null;
+  nextCycleOverride?: {
+    amountPaise: number;
+    note?: string;
+  } | null;
+};
 
 // Shared dialog chrome — mirrors the existing "Edit expense" modal's look
 // (dark card, icon title bar, footer buttons) so all dialogs stay consistent.
@@ -163,6 +185,7 @@ export default function GroupDetailPage() {
   const [members, setMembers] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [summary, setSummary] = useState<GroupSummary | null>(null);
+  const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplateRow[]>([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [paidById, setPaidById] = useState("");
@@ -228,6 +251,15 @@ export default function GroupDetailPage() {
     if (res.ok) setSummary(await res.json());
   }, [id]);
 
+  // Same endpoint the /recurring page reads from — kept in sync here via
+  // the initial load, the focus/visibility refetch, and refreshAll, so a
+  // template deleted on /recurring disappears from this page's table too
+  // as soon as the user comes back, without any special-case wiring.
+  const loadRecurringTemplates = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/recurring`);
+    if (res.ok) setRecurringTemplates(await res.json());
+  }, [id]);
+
   // Scoped to this group via groupId — without this, incoming requests from
   // every group the user owns expenses in would show up here regardless of
   // which group's page is actually open.
@@ -289,9 +321,14 @@ export default function GroupDetailPage() {
 
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    Promise.all([loadExpenses(), loadGroup(), loadSummary(), loadPendingRequests(), loadMyPermissions()]).finally(() =>
-      setInitialLoading(false)
-    );
+    Promise.all([
+      loadExpenses(),
+      loadGroup(),
+      loadSummary(),
+      loadPendingRequests(),
+      loadMyPermissions(),
+      loadRecurringTemplates(),
+    ]).finally(() => setInitialLoading(false));
 
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
@@ -300,13 +337,16 @@ export default function GroupDetailPage() {
       }
     }, 8000);
 
-    // Refetch balances/expenses immediately when the user comes back to this
-    // tab/page (e.g. after settling a payment on /settle and navigating
-    // back) instead of waiting for the next poll tick or a full remount.
+    // Refetch balances/expenses/recurring templates immediately when the
+    // user comes back to this tab/page (e.g. after settling a payment on
+    // /settle, or deleting/pausing a template on /recurring, and
+    // navigating back) instead of waiting for the next poll tick or a full
+    // remount.
     function handleFocusOrVisible() {
       if (document.visibilityState === "visible") {
         loadSummary();
         loadExpenses();
+        loadRecurringTemplates();
       }
     }
     window.addEventListener("focus", handleFocusOrVisible);
@@ -317,11 +357,18 @@ export default function GroupDetailPage() {
       window.removeEventListener("focus", handleFocusOrVisible);
       document.removeEventListener("visibilitychange", handleFocusOrVisible);
     };
-  }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions]);
+  }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadExpenses(), loadGroup(), loadSummary(), loadPendingRequests(), loadMyPermissions()]);
-  }, [loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions]);
+    await Promise.all([
+      loadExpenses(),
+      loadGroup(),
+      loadSummary(),
+      loadPendingRequests(),
+      loadMyPermissions(),
+      loadRecurringTemplates(),
+    ]);
+  }, [loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
 
   async function respondToRequest(permissionId: string, decision: "approved" | "denied") {
     await fetch(`/api/edit-permissions/${permissionId}`, {
@@ -719,7 +766,7 @@ export default function GroupDetailPage() {
       {/* d) & f) Add expense — opens dialog */}
       <button onClick={openExpenseModal}>Add expense</button>
 
-      {summary && <GroupSummaryCards summary={summary} />}
+      {summary && <GroupSummaryCards summary={summary} recurringTemplates={recurringTemplates} />}
 
       <h2>Expenses</h2>
       <GroupExpensesGrid
@@ -732,6 +779,24 @@ export default function GroupDetailPage() {
         onDelete={deleteExpense}
         onRequestAccess={(expenseId) => requestEditPermission(expenseId, "edit")}
       />
+
+      {/* Recurring expenses — separate table from the Expenses grid above:
+          this lists the *templates*, not individual generated expenses.
+          Read-only here; create/edit/pause/delete happens on the
+          /recurring page. Kept in sync via loadRecurringTemplates, so a
+          deleted template drops out of this list automatically. */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28 }}>
+        <h2 style={{ margin: 0 }}>Recurring expenses</h2>
+        <Link href={`/groups/${id}/recurring`} style={{ fontSize: 13, color: "#93c5fd" }}>
+          Manage →
+        </Link>
+      </div>
+
+      {recurringTemplates.length === 0 ? (
+        <p style={{ color: "#888", fontSize: 13.5 }}>No recurring templates yet.</p>
+      ) : (
+        <GroupRecurringGrid templates={recurringTemplates} />
+      )}
 
       {/* Add member dialog */}
       {showAddMemberModal && (
