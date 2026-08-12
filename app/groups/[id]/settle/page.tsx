@@ -18,6 +18,7 @@ export default function SettlePage() {
   const [showPartialInput, setShowPartialInput] = useState<Record<number, boolean>>({});
   const [paymentMethods, setPaymentMethods] = useState<Record<number, string>>({});
   const [history, setHistory] = useState<any[]>([]);
+  const [recurringTemplates, setRecurringTemplates] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [utrInputs, setUtrInputs] = useState<Record<string, string>>({});
   const [utrErrors, setUtrErrors] = useState<Record<string, string>>({});
@@ -70,12 +71,39 @@ export default function SettlePage() {
     setHistory(await res.json());
   }, [id]);
 
+  // Same endpoint the group and /recurring pages read from — shown here as
+  // a lightweight read-only list so upcoming/active recurring charges are
+  // visible on the settle page even before they've generated a real
+  // expense (which is what actually moves balances/suggestions).
+  const loadRecurringTemplates = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/recurring`);
+    if (res.ok) setRecurringTemplates(await res.json());
+  }, [id]);
+
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadMe(), loadSuggestions(), loadHistory()]);
-  }, [loadMe, loadSuggestions, loadHistory]);
+    await Promise.all([loadMe(), loadSuggestions(), loadHistory(), loadRecurringTemplates()]);
+  }, [loadMe, loadSuggestions, loadHistory, loadRecurringTemplates]);
 
   useEffect(() => {
     refreshAll().finally(() => setInitialLoading(false));
+
+    // Refetch suggestions/history immediately when the user comes back to
+    // this tab/page — e.g. after running due recurring expenses, or
+    // pausing/deleting a template, on /recurring, either of which can
+    // change who owes whom. Mirrors the same refetch-on-focus pattern used
+    // on the group page so this page doesn't show stale suggestions.
+    function handleFocusOrVisible() {
+      if (document.visibilityState === "visible") {
+        refreshAll();
+      }
+    }
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
   }, [refreshAll]);
 
   function handlePartialChange(index: number, value: string, s: any) {
@@ -406,6 +434,57 @@ export default function SettlePage() {
         <h1 style={{ margin: 0, fontSize: 22 }}>Settle up</h1>
         <RefreshButton onRefresh={refreshAll} label="Refreshing settlement info" />
       </div>
+
+      <div style={{ marginTop: 6, fontSize: 13 }}>
+        <Link href={`/groups/${id}/balances`} style={{ color: "#888" }}>
+          View balances
+        </Link>
+        {" | "}
+        <Link href={`/groups/${id}/recurring`} style={{ color: "#888" }}>
+          Recurring expenses
+        </Link>
+      </div>
+
+      {/* Active recurring templates — read-only, informational only. These
+          haven't generated a real expense yet, so they don't affect the
+          suggestions/balances below; this just makes sure an upcoming
+          recurring charge isn't a surprise. */}
+      {recurringTemplates.filter((t) => t.active).length > 0 && (
+        <div
+          style={{
+            marginTop: 14,
+            padding: "10px 14px",
+            border: "1px solid #2a2a2a",
+            borderRadius: 10,
+            background: "#141414",
+          }}
+        >
+          <div style={{ fontSize: 11.5, color: "#888", marginBottom: 6, textTransform: "uppercase", letterSpacing: 0.4 }}>
+            Upcoming recurring charges
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {recurringTemplates
+              .filter((t) => t.active)
+              .map((t) => (
+                <div
+                  key={t.id}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: 13,
+                  }}
+                >
+                  <span style={{ color: "#eee" }}>{t.description}</span>
+                  <span style={{ color: "#aaa" }}>
+                    ₹{(t.amountPaise / 100).toFixed(2)}
+                    {t.nextRunAt && ` · next run ${new Date(t.nextRunAt).toLocaleDateString()}`}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {!initialLoading && suggestions.length === 0 && (
         <div

@@ -4,6 +4,8 @@ import { splitEqual, splitByShares } from "@/lib/split-logic";
 
 export async function POST() {
   const now = new Date();
+
+  // Only run ACTIVE templates that are due — skip paused ones
   const dueTemplates = await prisma.recurringTemplate.findMany({
     where: { active: true, nextRunAt: { lte: now } },
   });
@@ -11,52 +13,93 @@ export async function POST() {
   const results = [];
 
   for (const template of dueTemplates) {
-    // Always fetch CURRENT members at generation time — this is what makes
-    // mid-cycle member joins/leaves work correctly: someone who joined last
-    // week is automatically included in this month's rent split, and someone
-    // who left is automatically excluded, with no manual adjustment needed.
-    const members = await prisma.groupMember.findMany({ where: { groupId: template.groupId } });
-    const memberIds = members.map((m) => m.userId);
+    const members = await prisma.groupMember.findMany({
+      where: { groupId: template.groupId },
+    });
 
-    if (memberIds.length === 0) continue; // skip empty groups
+    let memberIds = members.map((m) => m.userId);
 
-    // Recurring expenses need a designated payer; using the first member as a
-    // simple default. A real app might let the template specify who pays each cycle.
+    // Read override if present
+    const override = template.nextCycleOverride as Record<string, any> | null;
+
+    // Exclude members specified in override (e.g. someone who left mid-month)
+    if (override?.excludeUserIds?.length > 0) {
+      memberIds = memberIds.filter(
+        (uid) => !override.excludeUserIds.includes(uid)
+      );
+    }
+
+    if (memberIds.length === 0) {
+      // Skip empty groups — update nextRunAt anyway so it doesn't stay stuck
+      await prisma.recurringTemplate.update({
+        where: { id: template.id },
+        data: {
+          nextRunAt: new Date(
+            template.nextRunAt.getTime() + template.frequencyDays * 86400000
+          ),
+        },
+      });
+      continue;
+    }
+
     const payerId = memberIds[0];
 
+    // Use override amount if set, otherwise use template default
+    const amountPaise = override?.amountPaise ?? template.amountPaise;
+
+    // Use override shareUnits if set, otherwise use template default
+    const shareUnits = (override?.shareUnits ?? template.shareUnits) as
+      | Record<string, number>
+      | null;
+
     let splits;
-    if (template.splitType === "SHARES" && template.shareUnits) {
-      const shareUnits = template.shareUnits as Record<string, number>;
-      // Only include current members in the share calculation, in case someone left
+    if (template.splitType === "SHARES" && shareUnits) {
+      // Filter share units to only current (non-excluded) members
       const filteredShares = Object.fromEntries(
-        Object.entries(shareUnits).filter(([userId]) => memberIds.includes(userId))
+        Object.entries(shareUnits).filter(([uid]) => memberIds.includes(uid))
       );
-      splits = splitByShares(template.amountPaise, filteredShares, payerId);
+      splits = splitByShares(amountPaise, filteredShares, payerId);
     } else {
-      splits = splitEqual(template.amountPaise, memberIds, payerId);
+      splits = splitEqual(amountPaise, memberIds, payerId);
     }
+
+    // Add note to description if this was a prorated cycle
+    const description = override?.note
+      ? `${template.description} (${override.note})`
+      : template.description;
 
     const expense = await prisma.expense.create({
       data: {
         groupId: template.groupId,
-        description: template.description,
-        amountPaise: template.amountPaise,
+        description,
+        amountPaise,
         paidById: payerId,
+        createdById: payerId,
         splitType: template.splitType,
         splits: { create: splits },
+        recurringTemplateId: template.id,
       },
     });
 
-    const nextRunAt = new Date(template.nextRunAt);
-    nextRunAt.setDate(nextRunAt.getDate() + template.frequencyDays);
+    // Push nextRunAt forward by frequencyDays
+    const nextRunAt = new Date(
+      template.nextRunAt.getTime() + template.frequencyDays * 86400000
+    );
 
+    // Clear the one-time override after using it
     await prisma.recurringTemplate.update({
       where: { id: template.id },
-      data: { nextRunAt },
+      data: {
+        nextRunAt,
+        nextCycleOverride: null, // consumed — revert to normal next cycle
+      },
     });
 
-    results.push(expense);
+    results.push({ expenseId: expense.id, description, amountPaise });
   }
 
-  return NextResponse.json({ generated: results.length, expenses: results });
+  return NextResponse.json({
+    generated: results.length,
+    expenses: results,
+  });
 }

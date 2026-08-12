@@ -22,15 +22,21 @@ export default function BalancesPage() {
   const { id } = useParams();
 
   const [balances, setBalances] = useState<Balance[]>([]);
+  const [recurringTemplates, setRecurringTemplates] = useState<any[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     if (!id) return;
     try {
-      const [meResponse, balancesResponse] = await Promise.all([
+      const [meResponse, balancesResponse, recurringResponse] = await Promise.all([
         fetch("/api/me"),
         fetch(`/api/groups/${id}/balances`),
+        // Same endpoint the group and /recurring pages read from — shown
+        // here as a read-only list so an upcoming/active recurring charge
+        // is visible even before it's generated a real expense (which is
+        // what actually moves these balances).
+        fetch(`/api/groups/${id}/recurring`),
       ]);
 
       const me = await meResponse.json();
@@ -38,6 +44,7 @@ export default function BalancesPage() {
 
       setCurrentUserId(me.userId);
       setBalances(balanceData);
+      if (recurringResponse.ok) setRecurringTemplates(await recurringResponse.json());
     } catch (error) {
       console.error("Failed to load balances:", error);
     } finally {
@@ -47,6 +54,25 @@ export default function BalancesPage() {
 
   useEffect(() => {
     loadData();
+
+    // Refetch balances immediately when the user comes back to this
+    // tab/page — e.g. after running due recurring expenses, or
+    // pausing/deleting a template, on /recurring, or after settling a
+    // payment on /settle, either of which can change who owes whom.
+    // Mirrors the same refetch-on-focus pattern used on the group and
+    // settle pages so this page doesn't show stale numbers.
+    function handleFocusOrVisible() {
+      if (document.visibilityState === "visible") {
+        loadData();
+      }
+    }
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
   }, [loadData]);
 
   const creditors = balances.filter((b) => b.netPaise > 0);
@@ -158,7 +184,7 @@ export default function BalancesPage() {
             <RefreshButton onRefresh={loadData} label="Refreshing balances" />
           </div>
 
-          <div className="mt-3 flex items-center gap-2 text-sm">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
             <Link
               href={`/groups/${id}`}
               className="text-gray-500 transition hover:text-gray-900"
@@ -174,8 +200,42 @@ export default function BalancesPage() {
             >
               Settle up →
             </Link>
+
+            <span className="text-gray-300">|</span>
+
+            <Link
+              href={`/groups/${id}/recurring`}
+              className="text-gray-500 transition hover:text-gray-900"
+            >
+              Recurring expenses
+            </Link>
           </div>
         </div>
+
+        {/* Active recurring templates — read-only, informational only.
+            These haven't generated a real expense yet, so they don't
+            affect the balances above; this just makes sure an upcoming
+            recurring charge isn't a surprise. */}
+        {recurringTemplates.filter((t: any) => t.active).length > 0 && (
+          <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <p className="mb-2 text-xs font-bold uppercase tracking-widest text-gray-500">
+              Upcoming recurring charges
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {recurringTemplates
+                .filter((t: any) => t.active)
+                .map((t: any) => (
+                  <div key={t.id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-900">{t.description}</span>
+                    <span className="text-gray-500">
+                      ₹{(t.amountPaise / 100).toFixed(2)}
+                      {t.nextRunAt && ` · next run ${new Date(t.nextRunAt).toLocaleDateString()}`}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Everyone settled */}
         {balances.length > 0 &&
