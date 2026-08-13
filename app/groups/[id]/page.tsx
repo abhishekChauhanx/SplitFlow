@@ -13,12 +13,6 @@ import GroupRecurringGrid from "@/components/GroupRecurringGrid";
 import NotificationBell from "@/components/NotificationBell";
 import type { GroupSummary } from "@/lib/group-summary";
 
-// Mirrors what /api/groups/[id]/recurring returns — used for the read-only
-// "Recurring expenses" summary table on the group page. Full create/edit/
-// pause/delete management still happens on the /recurring page; this table
-// just reflects current state and re-syncs automatically (see the
-// visibility/focus effect below) so a template deleted there disappears
-// here too without a manual refresh.
 type RecurringTemplateRow = {
   id: string;
   description: string;

@@ -50,14 +50,40 @@ async function checkEmail() {
 async function recordPayment() {
   if (!name.trim()) { setError("Please enter your name"); return; }
   if (!email.trim()) { setError("Please enter your email"); return; }
+
   setSubmitting(true);
   setError("");
-  const res = await fetch(`/api/vendor/pay/${token}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, email, utrNumber, paymentMethod }),
-  });
-  // ...unchanged
+
+  try {
+    const res = await fetch(`/api/vendor/pay/${token}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, utrNumber, paymentMethod }),
+    });
+
+    // Guard against a non-JSON response (e.g. a 500 HTML error page from a
+    // server-side crash) — without this, res.json() throws and the button
+    // gets stuck on "Recording..." forever since nothing resets submitting.
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      setError("Something went wrong on our end — please try again.");
+      return;
+    }
+
+    if (!res.ok) {
+      setError(data?.error || "Failed to record payment");
+      return;
+    }
+
+    setDone(true);
+  } catch (err) {
+    // Network failure, request aborted, etc.
+    setError("Couldn't reach the server — check your connection and try again.");
+  } finally {
+    setSubmitting(false);
+  }
 }
 
   if (loading) return <p style={{ textAlign: "center", marginTop: 80 }}>Loading...</p>;

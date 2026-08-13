@@ -1,26 +1,21 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, ReactNode } from "react";
 
-type PendingRequest = {
-  id: string;
-  action: string;
-  requestedBy: { name?: string | null; email?: string | null };
-  expense: { description: string; amountPaise: number };
-};
-
-export default function NotificationBell({
-  requests,
-  onApprove,
-  onDeny,
+export default function NotificationBell<T>({
+  items,
+  getKey,
+  renderItem,
+  emptyMessage = "Nothing needs your attention.",
 }: {
-  requests: PendingRequest[];
-  onApprove: (id: string) => void;
-  onDeny: (id: string) => void;
+  items: T[];
+  getKey: (item: T) => string;
+  renderItem: (item: T) => ReactNode;
+  emptyMessage?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const count = requests.length;
+  const count = items.length;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -101,29 +96,11 @@ export default function NotificationBell({
           </div>
 
           {count === 0 ? (
-            <p style={{ padding: 14, margin: 0, fontSize: 13, color: "#888" }}>Nothing needs your attention.</p>
+            <p style={{ padding: 14, margin: 0, fontSize: 13, color: "#888" }}>{emptyMessage}</p>
           ) : (
-            requests.map((req) => (
-              <div key={req.id} style={{ padding: "10px 14px", borderBottom: "1px solid #222" }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
-                  <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
-                  <strong>{req.action}</strong> "{req.expense.description}" — ₹
-                  {(req.expense.amountPaise / 100).toFixed(2)}
-                </p>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    onClick={() => onApprove(req.id)}
-                    style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-                  >
-                    ✓ Approve
-                  </button>
-                  <button
-                    onClick={() => onDeny(req.id)}
-                    style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-                  >
-                    ✗ Deny
-                  </button>
-                </div>
+            items.map((item) => (
+              <div key={getKey(item)} style={{ padding: "10px 14px", borderBottom: "1px solid #222" }}>
+                {renderItem(item)}
               </div>
             ))
           )}
