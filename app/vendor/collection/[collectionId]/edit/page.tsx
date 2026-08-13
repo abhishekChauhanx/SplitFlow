@@ -5,42 +5,62 @@ import { useParams, useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import RefreshButton from "@/components/RefreshButton";
 import SFLoaderOverlay from "@/components/SFLoaderOverlay";
+import { useModal } from "@/components/ModalProvider";
+
+type ExistingSubscriber = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  hasPaid: boolean;
+};
+
+type NewSubscriber = { name: string; email: string; phone: string };
 
 export default function EditCollectionPage() {
   const { collectionId } = useParams();
   const router = useRouter();
+  const { confirm, promptForm } = useModal();
 
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState("");
 
-  // existing subscribers, tracked with edit + removal state
-  const [existing, setExisting] = useState<any[]>([]);
+  const [existing, setExisting] = useState<ExistingSubscriber[]>([]);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
-  const [added, setAdded] = useState<{ name: string; email: string; phone: string }[]>([]);
+  const [added, setAdded] = useState<NewSubscriber[]>([]);
 
   async function load() {
     const res = await fetch(`/api/vendor/collections/${collectionId}`);
     const data = await res.json();
-    if (!res.ok) { setError(data.error || "Failed to load"); setLoading(false); return; }
+    if (!res.ok) {
+      setLoadError(data.error || "Failed to load collection");
+      return;
+    }
+    setLoadError("");
     setTitle(data.title);
     setAmount((data.amountPaise / 100).toString());
     setDueDate(data.dueDate ? data.dueDate.slice(0, 10) : "");
-    setExisting(data.subscribers.map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      email: s.email || "",
-      phone: s.phone || "",
-      hasPaid: !!s.payment,
-    })));
-    setLoading(false);
+    setExisting(
+      data.subscribers.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        email: s.email || "",
+        phone: s.phone || "",
+        hasPaid: !!s.payment,
+      }))
+    );
+    setRemovedIds([]);
+    setAdded([]);
   }
 
-  useEffect(() => { load(); }, [collectionId]);
+  useEffect(() => {
+    load().finally(() => setInitialLoading(false));
+  }, [collectionId]);
 
   function updateExisting(id: string, field: string, value: string) {
     setExisting(existing.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
@@ -50,12 +70,70 @@ export default function EditCollectionPage() {
     setRemovedIds(removedIds.includes(id) ? removedIds.filter((x) => x !== id) : [...removedIds, id]);
   }
 
-  function addRow() {
-    setAdded([...added, { name: "", email: "", phone: "" }]);
+  function allEmailsExcept(excludeId?: string, excludeAddedIndex?: number) {
+    const fromExisting = existing
+      .filter((s) => s.id !== excludeId && !removedIds.includes(s.id))
+      .map((s) => s.email.trim().toLowerCase())
+      .filter(Boolean);
+    const fromAdded = added
+      .filter((_, i) => i !== excludeAddedIndex)
+      .map((s) => s.email.trim().toLowerCase())
+      .filter(Boolean);
+    return [...fromExisting, ...fromAdded];
   }
 
-  function updateAdded(i: number, field: string, value: string) {
-    setAdded(added.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
+  async function openAddSubscriberForm() {
+    const result = await promptForm({
+      title: "Add subscriber",
+      fields: [
+        { key: "name", label: "Name", placeholder: "e.g. Rahul Sharma", required: true },
+        { key: "email", label: "Email", placeholder: "e.g. rahul@example.com", type: "email" },
+        { key: "phone", label: "Phone", placeholder: "e.g. 98765 43210", type: "tel" },
+      ],
+      confirmLabel: "Add",
+    });
+
+    if (!result) return;
+
+    const normalizedEmail = result.email.trim().toLowerCase();
+    if (normalizedEmail && allEmailsExcept().includes(normalizedEmail)) {
+      await confirm({
+        title: "Duplicate email",
+        message: `"${result.email}" is already in this collection's subscriber list.`,
+        mode: "alert",
+      });
+      return;
+    }
+
+    setAdded([...added, { name: result.name, email: result.email, phone: result.phone }]);
+  }
+
+  async function openEditAddedForm(index: number) {
+    const current = added[index];
+    const result = await promptForm({
+      title: "Edit subscriber",
+      fields: [
+        { key: "name", label: "Name", placeholder: "e.g. Rahul Sharma", required: true },
+        { key: "email", label: "Email", placeholder: "e.g. rahul@example.com", type: "email" },
+        { key: "phone", label: "Phone", placeholder: "e.g. 98765 43210", type: "tel" },
+      ],
+      defaultValues: current,
+      confirmLabel: "Save",
+    });
+
+    if (!result) return;
+
+    const normalizedEmail = result.email.trim().toLowerCase();
+    if (normalizedEmail && allEmailsExcept(undefined, index).includes(normalizedEmail)) {
+      await confirm({
+        title: "Duplicate email",
+        message: `"${result.email}" is already in this collection's subscriber list.`,
+        mode: "alert",
+      });
+      return;
+    }
+
+    setAdded(added.map((s, i) => (i === index ? { name: result.name, email: result.email, phone: result.phone } : s)));
   }
 
   function removeAddedRow(i: number) {
@@ -63,8 +141,22 @@ export default function EditCollectionPage() {
   }
 
   async function save() {
+    // client-side duplicate check across everything about to be sent
+    const finalEmails = [
+      ...existing.filter((s) => !removedIds.includes(s.id)).map((s) => s.email.trim().toLowerCase()),
+      ...added.map((s) => s.email.trim().toLowerCase()),
+    ].filter(Boolean);
+    const dupe = finalEmails.find((e, i) => finalEmails.indexOf(e) !== i);
+    if (dupe) {
+      await confirm({
+        title: "Duplicate email",
+        message: `"${dupe}" appears more than once in the subscriber list.`,
+        mode: "alert",
+      });
+      return;
+    }
+
     setSaving(true);
-    setError("");
     try {
       const res = await fetch(`/api/vendor/collections/${collectionId}`, {
         method: "PATCH",
@@ -81,25 +173,48 @@ export default function EditCollectionPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Failed to save"); return; }
+      if (!res.ok) {
+        await confirm({
+          title: "Couldn't save changes",
+          message: data.error || "Something went wrong — please try again.",
+          mode: "alert",
+        });
+        return;
+      }
       router.push("/vendor/dashboard");
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <p style={{ textAlign: "center", marginTop: 80 }}>Loading...</p>;
+  const overlayVisible = initialLoading || saving;
+  const overlayLabel = saving ? `Saving "${title || "collection"}"` : "Loading collection";
+
+  if (initialLoading) {
+    return <SFLoaderOverlay visible={true} label={overlayLabel} />;
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ maxWidth: 520, margin: "40px auto", padding: "0 16px" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20 }}>
+          <BackButton href="/vendor/dashboard" />
+          <h1 style={{ margin: 0, fontSize: 20 }}>Edit collection</h1>
+        </div>
+        <p style={{ color: "#f87171" }}>{loadError}</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 520, margin: "40px auto", padding: "0 16px" }}>
-      <SFLoaderOverlay visible={saving} label="Saving..." />
+      <SFLoaderOverlay visible={overlayVisible} label={overlayLabel} />
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <BackButton href="/vendor/dashboard" />
           <h1 style={{ margin: 0, fontSize: 20 }}>Edit collection</h1>
         </div>
-        <RefreshButton onRefresh={load} label="Refreshing..." />
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -167,28 +282,52 @@ export default function EditCollectionPage() {
         </div>
       ))}
 
-      <h2 style={{ fontSize: 15, marginTop: 20 }}>Add new subscribers</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, marginBottom: 8 }}>
+        <h2 style={{ fontSize: 15, margin: 0 }}>New subscribers</h2>
+        <button
+          onClick={openAddSubscriberForm}
+          style={{ fontSize: 13, background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer" }}
+        >
+          + Add subscriber
+        </button>
+      </div>
+
+      {added.length === 0 && (
+        <div style={{ padding: 16, background: "#1a1a1a", borderRadius: 8, textAlign: "center", marginBottom: 20 }}>
+          <p style={{ color: "#888", margin: 0, fontSize: 13 }}>No new subscribers added.</p>
+        </div>
+      )}
+
       {added.map((s, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input placeholder="Name *" value={s.name} onChange={(e) => updateAdded(i, "name", e.target.value)} style={{ flex: 2 }} />
-          <input placeholder="Email" value={s.email} onChange={(e) => updateAdded(i, "email", e.target.value)} style={{ flex: 2 }} />
-          <input placeholder="Phone" value={s.phone} onChange={(e) => updateAdded(i, "phone", e.target.value)} style={{ flex: 2 }} />
-          <button onClick={() => removeAddedRow(i)} style={{ color: "#f87171", background: "none", border: "none", cursor: "pointer", fontSize: 16 }}>✕</button>
+        <div
+          key={i}
+          style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "10px 12px", background: "#141414", border: "1px solid #2a2a2a",
+            borderRadius: 8, marginBottom: 8,
+          }}
+        >
+          <div>
+            <p style={{ margin: 0, fontSize: 14 }}>{s.name}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>
+              {[s.email, s.phone].filter(Boolean).join(" · ") || "No contact info"}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => openEditAddedForm(i)} style={{ fontSize: 12, color: "#60a5fa", background: "none", border: "none", cursor: "pointer" }}>
+              Edit
+            </button>
+            <button onClick={() => removeAddedRow(i)} style={{ fontSize: 12, color: "#f87171", background: "none", border: "none", cursor: "pointer" }}>
+              Remove
+            </button>
+          </div>
         </div>
       ))}
-      <button
-        onClick={addRow}
-        style={{ fontSize: 13, color: "#888", background: "none", border: "1px dashed #333", borderRadius: 6, padding: "6px 14px", cursor: "pointer", marginBottom: 20, width: "100%" }}
-      >
-        + Add another subscriber
-      </button>
-
-      {error && <p style={{ color: "#f87171", marginBottom: 12 }}>{error}</p>}
 
       <button
         onClick={save}
         disabled={saving || !title || !amount}
-        style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 14, cursor: "pointer", width: "100%" }}
+        style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 14, cursor: "pointer", width: "100%", marginTop: 20 }}
       >
         {saving ? "Saving..." : "Save changes"}
       </button>
