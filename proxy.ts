@@ -44,7 +44,8 @@ export async function proxy(req: NextRequest) {
   const isPublic =
     pathname === "/login" ||
     pathname === "/account-deleted" ||
-    pathname.startsWith("/join/");
+    pathname.startsWith("/join/") ||
+    pathname.startsWith("/pay/");
 
   if (!isPublic && !isValidSession) {
     const loginUrl = new URL("/login", req.url);
