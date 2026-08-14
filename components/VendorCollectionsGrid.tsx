@@ -28,9 +28,12 @@ type VendorCollectionRow = {
   totalSubscribers: number;
   paidCount: number;
   confirmedCount: number;
+  awaitingConfirmationCount: number;
   pendingCount: number;
   hasAnyPaid: boolean;
   collectionUrl: string;
+  paidNames: string;
+  pendingNames: string;
 };
 
 function dueDateFormatter(params: { value: string }) {
@@ -41,11 +44,13 @@ export default function VendorCollectionsGrid({
   collections,
   onEdit,
   onDelete,
+  onView,
   onCopyLink,
 }: {
   collections: VendorCollection[];
   onEdit: (collectionId: string) => void;
   onDelete: (row: { id: string; title: string; hasAnyPaid: boolean }) => void;
+  onView: (collectionId: string) => void;
   onCopyLink: (url: string) => void;
 }) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -54,9 +59,10 @@ export default function VendorCollectionsGrid({
     () =>
       collections.map((c) => {
         const total = c.subscribers.length;
-        const paidCount = c.subscribers.filter(
+        const paidSubs = c.subscribers.filter(
           (s) => s.payment?.status === "paid" || s.payment?.status === "confirmed"
-        ).length;
+        );
+        const pendingSubs = c.subscribers.filter((s) => !s.payment);
         const confirmedCount = c.subscribers.filter((s) => s.payment?.status === "confirmed").length;
         const hasAnyPaid = c.subscribers.some((s) => !!s.payment);
 
@@ -66,11 +72,14 @@ export default function VendorCollectionsGrid({
           amountRupees: c.amountPaise / 100,
           dueDateLabel: c.dueDate ? new Date(c.dueDate).toLocaleDateString() : "",
           totalSubscribers: total,
-          paidCount,
+          paidCount: paidSubs.length,
           confirmedCount,
-          pendingCount: total - paidCount,
+          awaitingConfirmationCount: paidSubs.length - confirmedCount,
+          pendingCount: pendingSubs.length,
           hasAnyPaid,
           collectionUrl: `${origin}/pay/${c.token}`,
+          paidNames: paidSubs.map((s) => s.name).join(", ") || "—",
+          pendingNames: pendingSubs.map((s) => s.name).join(", ") || "—",
         };
       }),
     [collections, origin]
@@ -82,8 +91,8 @@ export default function VendorCollectionsGrid({
         headerName: "Title",
         field: "title",
         cellDataType: "text",
-        flex: 2,
-        minWidth: 160,
+        flex: 1.5,
+        minWidth: 150,
         enableValue: false,
       },
       {
@@ -98,7 +107,7 @@ export default function VendorCollectionsGrid({
         headerName: "Due date",
         field: "dueDateLabel",
         valueFormatter: dueDateFormatter,
-        minWidth: 120,
+        minWidth: 110,
         enableValue: false,
       },
       {
@@ -106,18 +115,38 @@ export default function VendorCollectionsGrid({
         field: "totalSubscribers",
         type: "numericColumn",
         cellDataType: "number",
-        minWidth: 110,
+        minWidth: 100,
       },
       {
         headerName: "Paid",
         field: "paidCount",
-        minWidth: 110,
+        minWidth: 90,
         enableValue: false,
         cellRenderer: (params: { data: VendorCollectionRow }) => (
           <span style={{ color: "#86efac" }}>
             {params.data.paidCount}/{params.data.totalSubscribers}
           </span>
         ),
+      },
+      {
+        headerName: "Who paid",
+        field: "paidNames",
+        cellDataType: "text",
+        flex: 2,
+        minWidth: 200,
+        enableValue: false,
+        tooltipField: "paidNames",
+        cellStyle: { color: "#86efac" },
+      },
+      {
+        headerName: "Who hasn't paid",
+        field: "pendingNames",
+        cellDataType: "text",
+        flex: 2,
+        minWidth: 200,
+        enableValue: false,
+        tooltipField: "pendingNames",
+        cellStyle: { color: "#f87171" },
       },
       {
         headerName: "Confirmed",
@@ -127,31 +156,20 @@ export default function VendorCollectionsGrid({
         minWidth: 100,
       },
       {
-        headerName: "Pending",
-        field: "pendingCount",
-        minWidth: 100,
+        headerName: "Awaiting confirm",
+        field: "awaitingConfirmationCount",
+        minWidth: 130,
         enableValue: false,
         cellRenderer: (params: { data: VendorCollectionRow }) => (
-          <span style={{ color: params.data.pendingCount > 0 ? "#f87171" : "#888" }}>
-            {params.data.pendingCount}
-          </span>
-        ),
-      },
-      {
-        headerName: "Status",
-        field: "hasAnyPaid",
-        minWidth: 110,
-        enableValue: false,
-        cellRenderer: (params: { data: VendorCollectionRow }) => (
-          <span style={{ color: params.data.hasAnyPaid ? "#f59e0b" : "#93c5fd" }}>
-            {params.data.hasAnyPaid ? "Locked" : "Editable"}
+          <span style={{ color: params.data.awaitingConfirmationCount > 0 ? "#f59e0b" : "#888" }}>
+            {params.data.awaitingConfirmationCount}
           </span>
         ),
       },
       {
         headerName: "Link",
         field: "collectionUrl",
-        minWidth: 100,
+        minWidth: 90,
         enableValue: false,
         sortable: false,
         cellRenderer: (params: { data: VendorCollectionRow }) => (
@@ -166,7 +184,7 @@ export default function VendorCollectionsGrid({
       {
         headerName: "Actions",
         field: "id",
-        minWidth: 140,
+        minWidth: 190,
         enableValue: false,
         sortable: false,
         filter: false,
@@ -174,6 +192,12 @@ export default function VendorCollectionsGrid({
           const row = params.data;
           return (
             <div style={{ display: "flex", gap: 10, alignItems: "center", height: "100%" }}>
+              <button
+                onClick={() => onView(row.id)}
+                style={{ fontSize: 12, color: "#93c5fd", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+              >
+                View
+              </button>
               <button
                 onClick={() => onEdit(row.id)}
                 style={{ fontSize: 12, color: "#60a5fa", background: "none", border: "none", cursor: "pointer", padding: 0 }}
@@ -200,8 +224,12 @@ export default function VendorCollectionsGrid({
         },
       },
     ],
-    [onEdit, onDelete, onCopyLink]
+    [onEdit, onDelete, onView, onCopyLink]
   );
 
-  return <DataGrid<VendorCollectionRow> rows={rows} columnDefs={columnDefs} getRowId={(r) => r.id} height={360} />;
+  return (
+    <div style={{ width: "100%" }}>
+      <DataGrid<VendorCollectionRow> rows={rows} columnDefs={columnDefs} getRowId={(r) => r.id} height={360} />
+    </div>
+  );
 }

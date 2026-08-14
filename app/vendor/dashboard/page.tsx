@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import RefreshButton from "@/components/RefreshButton";
@@ -17,7 +17,6 @@ type PendingConfirmation = {
   amountPaise: number;
 };
 
-// Same dialog chrome used on the group page — dark card, icon title bar, footer buttons.
 function Dialog({
   icon,
   iconColor,
@@ -115,19 +114,51 @@ export default function VendorDashboardPage() {
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [viewingCollectionId, setViewingCollectionId] = useState<string | null>(null);
 
-  async function load() {
-    const res = await fetch("/api/vendor/register");
+  const load = useCallback(async () => {
+    const res = await fetch("/api/vendor/register", { cache: "no-store" });
     const data = await res.json();
     if (!data || data.error) {
       router.push("/vendor/register");
       return;
     }
     setVendor(data);
-  }
+  }, [router]);
+
+  const silentReload = useCallback(async () => {
+    try {
+      const res = await fetch("/api/vendor/register", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data || data.error) return;
+      setVendor(data);
+    } catch {
+      // ignore — will retry on next poll tick
+    }
+  }, []);
 
   useEffect(() => {
     load().finally(() => setInitialLoading(false));
-  }, []);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        silentReload();
+      }
+    }, 8000);
+
+    function handleFocusOrVisible() {
+      if (document.visibilityState === "visible") {
+        silentReload();
+      }
+    }
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
+  }, [load, silentReload]);
 
   function goToNewCollection() {
     setNavLabel("Loading new collection");
@@ -154,6 +185,7 @@ export default function VendorDashboardPage() {
       const res = await fetch(`/api/vendor/collections/${row.id}`, { method: "DELETE" });
       const data = await res.json();
       if (!res.ok) {
+        setDeletingId(null);
         await confirm({ title: "Can't delete", message: data.error || "Failed to delete this collection.", mode: "alert" });
         return;
       }
@@ -177,8 +209,6 @@ export default function VendorDashboardPage() {
     navigator.clipboard.writeText(url);
   }
 
-  // Flat list of every payment that's been marked "paid" by a subscriber but
-  // not yet "confirmed" by the vendor — feeds both the bell and the summary card.
   const pendingConfirmations = useMemo<PendingConfirmation[]>(() => {
     if (!vendor) return [];
     const list: PendingConfirmation[] = [];
@@ -217,7 +247,7 @@ export default function VendorDashboardPage() {
     : null;
 
   return (
-    <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
+    <div style={{ maxWidth: 1400, margin: "40px auto", padding: "0 24px" }}>
       <SFLoaderOverlay visible={overlayVisible} label={overlayLabel} />
 
       {/* Header */}
@@ -308,7 +338,7 @@ export default function VendorDashboardPage() {
         />
       )}
 
-      {/* Subscribers dialog — who's paid, who's pending, and the actual "Confirm receipt" action */}
+      {/* Subscribers dialog */}
       {viewingCollection && (
         <Dialog
           icon="👥"

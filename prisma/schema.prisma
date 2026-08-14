@@ -196,11 +196,12 @@ model VendorCollection {
   id              String                    @id @default(cuid())
   vendorId        String
   vendor          Vendor                    @relation(fields: [vendorId], references: [id])
-  title           String                    // e.g. "August Rent", "July Mess Bill"
-  amountPaise     Int                       // amount each subscriber owes
+  title           String
+  amountPaise     Int
   dueDate         DateTime?
-  cycleMonth      String?                   // e.g. "2026-08" for month-based cycles
-  token           String                    @unique @default(cuid()) // collection link token
+  cycleMonth      String?
+  token           String                    @unique @default(cuid())
+  openEnrollment  Boolean                   @default(false) // if true, anyone with the link can join as a new subscriber; if false (default), only pre-added subscribers can pay
   createdAt       DateTime                  @default(now())
   subscribers     VendorSubscriber[]
   payments        VendorPayment[]

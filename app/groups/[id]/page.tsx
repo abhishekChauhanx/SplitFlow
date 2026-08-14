@@ -28,6 +28,13 @@ type RecurringTemplateRow = {
   } | null;
 };
 
+type PendingRequest = {
+  id: string;
+  action: string;
+  requestedBy: { name?: string | null; email?: string | null };
+  expense: { description: string; amountPaise: number };
+};
+
 // Shared dialog chrome — mirrors the existing "Edit expense" modal's look
 // (dark card, icon title bar, footer buttons) so all dialogs stay consistent.
 function Dialog({
@@ -217,7 +224,7 @@ export default function GroupDetailPage() {
   const [requestingPermissionId, setRequestingPermissionId] = useState<string | null>(null);
 
   // Permission system state
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]); // for owner
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]); // for owner
   const [myPermissions, setMyPermissions] = useState<Record<string, string>>({}); // expenseId -> status
   const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, string>>({}); // expenseId -> permissionId
 
@@ -373,7 +380,10 @@ export default function GroupDetailPage() {
     loadPendingRequests();
   }
 
-  // e) Request edit access — replaces alert() with modal, adds per-expense loading
+  // e) Request edit access — replaces alert() with modal, adds per-expense loading.
+  // The overlay is cleared *before* any confirm()/info dialog is awaited —
+  // otherwise the full-page loader stays on top of the dialog and blocks
+  // clicks on its buttons until the dialog itself resolves.
   async function requestEditPermission(expenseId: string, action: string) {
     setRequestingPermissionId(expenseId);
     try {
@@ -393,26 +403,31 @@ export default function GroupDetailPage() {
           setEditPaidById(expense.paidById);
         }
       } else if (data.reason === "already_pending") {
+        setRequestingPermissionId(null);
         await confirm({
           title: "Already requested",
           message: "You've already requested this — waiting on the expense creator to respond.",
           mode: "alert",
         });
         setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+        return;
       } else {
+        setRequestingPermissionId(null);
         await confirm({
           title: "Request sent",
           message: "The creator of this expense has been notified. You'll see an update here once they respond.",
           mode: "alert",
         });
         setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+        return;
       }
     } finally {
       setRequestingPermissionId(null);
     }
   }
 
-  // e) Delete expense — native confirm() replaced with modal, adds per-expense loading
+  // e) Delete expense — native confirm() replaced with modal, adds per-expense loading.
+  // Same overlay-before-dialog fix as above.
   async function deleteExpense(expenseId: string) {
     const ok = await confirm({
       title: "Delete expense?",
@@ -427,9 +442,11 @@ export default function GroupDetailPage() {
       if (!res.ok) {
         const data = await res.json();
         if (data.error === "permission_required") {
+          setDeletingExpenseId(null);
           await requestEditPermission(expenseId, "delete");
           return;
         }
+        setDeletingExpenseId(null);
         await confirm({ title: "Couldn't delete", message: data.error, mode: "alert" });
         return;
       }
@@ -441,7 +458,8 @@ export default function GroupDetailPage() {
     }
   }
 
-  // e) Save edit — alert() replaced with modal, adds loading
+  // e) Save edit — alert() replaced with modal, adds loading.
+  // Same overlay-before-dialog fix as above.
   async function saveEditExpense(expenseId: string) {
     const ok = await confirm({
       title: "Save changes?",
@@ -464,6 +482,7 @@ export default function GroupDetailPage() {
       if (!res.ok) {
         const d = await res.json();
         if (d.error === "permission_required") {
+          setSavingEdit(false);
           await confirm({
             title: "Permission needed",
             message: "You need permission from the expense creator to edit this.",
@@ -471,6 +490,7 @@ export default function GroupDetailPage() {
           });
           return;
         }
+        setSavingEdit(false);
         await confirm({ title: "Couldn't save", message: d.error, mode: "alert" });
         return;
       }
@@ -721,10 +741,32 @@ export default function GroupDetailPage() {
           <h1 style={{ margin: 0 }}>Group</h1>
           <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
         </div>
-        <NotificationBell
-          requests={pendingRequests}
-          onApprove={(reqId) => respondToRequest(reqId, "approved")}
-          onDeny={(reqId) => respondToRequest(reqId, "denied")}
+        <NotificationBell<PendingRequest>
+          items={pendingRequests}
+          getKey={(req) => req.id}
+          renderItem={(req) => (
+            <>
+              <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
+                <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
+                <strong>{req.action}</strong> "{req.expense.description}" — ₹
+                {(req.expense.amountPaise / 100).toFixed(2)}
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => respondToRequest(req.id, "approved")}
+                  style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  onClick={() => respondToRequest(req.id, "denied")}
+                  style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                >
+                  ✗ Deny
+                </button>
+              </div>
+            </>
+          )}
         />
       </div>
 

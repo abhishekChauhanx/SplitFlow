@@ -45,7 +45,6 @@ export async function GET(
   });
 }
 
-// POST — record a payment, matched/deduped by email
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
@@ -67,29 +66,14 @@ export async function POST(
   if (subscriberId) {
     subscriber = collection.subscribers.find((s) => s.id === subscriberId);
     if (!subscriber) return NextResponse.json({ error: "Subscriber not found" }, { status: 404 });
-  } else if (userId) {
-    // Logged-in user — match by userId first, then by email (vendor may have pre-added them)
-    subscriber = collection.subscribers.find((s) => s.userId === userId);
-    if (!subscriber) {
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      const userEmail = user?.email?.toLowerCase() || null;
-      const byEmail = userEmail
-        ? collection.subscribers.find((s) => s.email?.toLowerCase() === userEmail)
-        : null;
-
-      subscriber = byEmail
-        ? await prisma.vendorSubscriber.update({ where: { id: byEmail.id }, data: { userId } })
-        : await prisma.vendorSubscriber.create({
-            data: {
-              collectionId: collection.id,
-              userId,
-              name: user?.name || user?.email || "Unknown",
-              email: userEmail,
-            },
-          });
-    }
   } else {
-    // Public link, not logged in — name + email both required
+    // Match against the EMAIL THE PERSON TYPED into the form first — this
+    // is the field the vendor's subscriber list is keyed on, and it's what
+    // the person filling the form is actually asserting. Do NOT substitute
+    // their logged-in session email here: someone can be logged into the
+    // app under one account while paying on behalf of / entering a
+    // different subscriber's email that the vendor added, and that must
+    // still match.
     if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
     if (!normalizedEmail) return NextResponse.json({ error: "Email is required" }, { status: 400 });
 
@@ -97,10 +81,16 @@ export async function POST(
 
     if (existing) {
       subscriber = existing;
-    } else {
+      // If they're logged in and this subscriber row isn't linked to a
+      // user yet, link it now — but only because the typed email already
+      // matched a real subscriber, not as a way to create new ones.
+      if (userId && !existing.userId) {
+        subscriber = await prisma.vendorSubscriber.update({ where: { id: existing.id }, data: { userId } });
+      }
+    } else if (collection.openEnrollment) {
       try {
         subscriber = await prisma.vendorSubscriber.create({
-          data: { collectionId: collection.id, name: name.trim(), email: normalizedEmail },
+          data: { collectionId: collection.id, name: name.trim(), email: normalizedEmail, userId: userId || null },
         });
       } catch (e: any) {
         if (e.code === "P2002") {
@@ -108,12 +98,20 @@ export async function POST(
         }
         throw e;
       }
+    } else {
+      return NextResponse.json(
+        { error: "This email isn't on the subscriber list for this collection. Contact the vendor to be added." },
+        { status: 403 }
+      );
     }
   }
 
   const existingPayment = await prisma.vendorPayment.findUnique({ where: { subscriberId: subscriber.id } });
   if (existingPayment) {
-    return NextResponse.json({ error: "A payment for this email has already been recorded" }, { status: 409 });
+    return NextResponse.json(
+      { error: `A payment for this email has already been recorded (under the name "${subscriber.name}").` },
+      { status: 409 }
+    );
   }
 
   const payment = await prisma.vendorPayment.create({
