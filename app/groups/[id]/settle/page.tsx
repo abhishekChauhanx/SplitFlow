@@ -42,6 +42,15 @@ export default function SettlePage() {
   // Tracks an in-flight "send reminder" action, keyed by suggestion index
   const [remindingIndex, setRemindingIndex] = useState<number | null>(null);
 
+  // Rent receipts — keyed by settlementId, populated from /api/rent-receipts
+  const [receipts, setReceipts] = useState<Record<string, any>>({});
+  const [receiptDialogSettlementId, setReceiptDialogSettlementId] = useState<string | null>(null);
+  const [receiptAddress, setReceiptAddress] = useState("");
+  const [periodFrom, setPeriodFrom] = useState("");
+  const [periodTo, setPeriodTo] = useState("");
+  const [generatingReceipt, setGeneratingReceipt] = useState(false);
+
+
   async function generateQr(index: number, s: any, amountPaiseOverride?: number) {
     if (!s.toUpiId) return;
     const amountPaise = amountPaiseOverride ?? s.amountPaise;
@@ -66,6 +75,17 @@ export default function SettlePage() {
     await Promise.all(data.map((s: any, i: number) => generateQr(i, s)));
   }, [id]);
 
+  const loadReceipts = useCallback(async () => {
+    const res = await fetch("/api/rent-receipts");
+    if (!res.ok) return;
+    const data = await res.json();
+    // Build a lookup by settlementId so each history card can check
+    // "does this settlement already have a receipt?" in O(1)
+    const map: Record<string, any> = {};
+    data.asTenant?.forEach((r: any) => { map[r.settlementId] = r; });
+    setReceipts(map);
+  }, []);
+
   const loadHistory = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/settlement-history`);
     setHistory(await res.json());
@@ -81,8 +101,8 @@ export default function SettlePage() {
   }, [id]);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([loadMe(), loadSuggestions(), loadHistory(), loadRecurringTemplates()]);
-  }, [loadMe, loadSuggestions, loadHistory, loadRecurringTemplates]);
+    await Promise.all([loadMe(), loadSuggestions(), loadHistory(), loadRecurringTemplates(), loadReceipts()]);
+  }, [loadMe, loadSuggestions, loadHistory, loadRecurringTemplates, loadReceipts]);
 
   useEffect(() => {
     refreshAll().finally(() => setInitialLoading(false));
@@ -142,9 +162,8 @@ export default function SettlePage() {
 
     const ok = await confirm({
       title: "Mark as paid?",
-      message: `Confirm you're paying ${s.toName} ₹${(amountToSend / 100).toFixed(2)} via ${
-        paymentMethod === "cash" ? "cash" : "UPI"
-      }.`,
+      message: `Confirm you're paying ${s.toName} ₹${(amountToSend / 100).toFixed(2)} via ${paymentMethod === "cash" ? "cash" : "UPI"
+        }.`,
       confirmLabel: "Mark as paid",
     });
     if (!ok) return;
@@ -234,9 +253,8 @@ export default function SettlePage() {
     const isPayer = h.fromUserId === currentUserId;
     const ok = await confirm({
       title: "Confirm this payment?",
-      message: `Confirm that ₹${(h.amountPaise / 100).toFixed(2)} ${
-        isPayer ? `was paid to ${h.toName}` : `was received from ${h.fromName}`
-      }.`,
+      message: `Confirm that ₹${(h.amountPaise / 100).toFixed(2)} ${isPayer ? `was paid to ${h.toName}` : `was received from ${h.fromName}`
+        }.`,
       confirmLabel: "Confirm",
     });
     if (!ok) return;
@@ -400,6 +418,63 @@ export default function SettlePage() {
     } finally {
       setRemindingIndex(null);
     }
+  }
+
+  function openReceiptDialog(settlementId: string) {
+    setReceiptAddress("");
+    setPeriodFrom("");
+    setPeriodTo("");
+    setReceiptDialogSettlementId(settlementId);
+  }
+
+  function closeReceiptDialog() {
+    setReceiptDialogSettlementId(null);
+  }
+
+  async function generateReceipt() {
+    if (!receiptDialogSettlementId) return;
+
+    if (!receiptAddress.trim() || !periodFrom || !periodTo) {
+      await confirm({
+        title: "Missing details",
+        message: "Please fill in the property address and both dates.",
+        mode: "alert",
+      });
+      return;
+    }
+
+    setGeneratingReceipt(true);
+    try {
+      const res = await fetch(`/api/settlements/${receiptDialogSettlementId}/generate-receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyAddress: receiptAddress.trim(),
+          paymentPeriodFrom: periodFrom,
+          paymentPeriodTo: periodTo,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        await confirm({ title: "Couldn't generate receipt", message: data.error || "Something went wrong.", mode: "alert" });
+        return;
+      }
+
+      closeReceiptDialog();
+      await loadReceipts();
+      await confirm({
+        title: "Receipt created",
+        message: "Waiting for your landlord to sign it. You can find it under Rent Receipts once signed.",
+        mode: "alert",
+      });
+    } finally {
+      setGeneratingReceipt(false);
+    }
+  }
+
+  function downloadReceipt(receiptId: string) {
+    window.open(`/api/rent-receipts/${receiptId}/download`, "_blank");
   }
 
   const activeIndex = payDialog?.index ?? null;
@@ -937,6 +1012,137 @@ export default function SettlePage() {
         </div>
       )}
 
+      {/* ── Rent receipt dialog ── */}
+      {receiptDialogSettlementId && (
+        <div
+          onClick={closeReceiptDialog}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            backdropFilter: "blur(4px)",
+            WebkitBackdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2900,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "min(420px, 100%)",
+              borderRadius: 12,
+              border: "1px solid #333",
+              boxShadow: "0 16px 50px rgba(0,0,0,0.6)",
+              background: "#161616",
+              padding: 20,
+            }}
+          >
+            <h3 style={{ margin: "0 0 6px", fontSize: 15, color: "#eee" }}>Generate rent receipt</h3>
+            <p style={{ margin: "0 0 16px", fontSize: 12.5, color: "#888" }}>
+              This creates an HRA-ready receipt tied to this confirmed payment. Your landlord will need to sign it before it's final.
+            </p>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
+                Property address
+              </label>
+              <input
+                placeholder="e.g. Flat 4B, Green Valley Apts, Pune"
+                value={receiptAddress}
+                onChange={(e) => setReceiptAddress(e.target.value)}
+                disabled={generatingReceipt}
+                style={{
+                  width: "100%",
+                  background: "#0f0f0f",
+                  border: "1px solid #333",
+                  borderRadius: 6,
+                  padding: "8px 10px",
+                  color: "#eee",
+                  fontSize: 13,
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
+                  Period from
+                </label>
+                <input
+                  type="date"
+                  value={periodFrom}
+                  onChange={(e) => setPeriodFrom(e.target.value)}
+                  disabled={generatingReceipt}
+                  style={{
+                    width: "100%",
+                    background: "#0f0f0f",
+                    border: "1px solid #333",
+                    borderRadius: 6,
+                    padding: "8px 10px",
+                    color: "#eee",
+                    fontSize: 13,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
+                  Period to
+                </label>
+                <input
+                  type="date"
+                  value={periodTo}
+                  onChange={(e) => setPeriodTo(e.target.value)}
+                  disabled={generatingReceipt}
+                  style={{
+                    width: "100%",
+                    background: "#0f0f0f",
+                    border: "1px solid #333",
+                    borderRadius: 6,
+                    padding: "8px 10px",
+                    color: "#eee",
+                    fontSize: 13,
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={closeReceiptDialog}
+                disabled={generatingReceipt}
+                style={{ flex: 1, background: "transparent", border: "1px solid #444", borderRadius: 8, color: "#ccc", fontSize: 13, padding: "10px 0", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={generateReceipt}
+                disabled={generatingReceipt || !receiptAddress || !periodFrom || !periodTo}
+                style={{
+                  flex: 1,
+                  background: "#2563eb",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  padding: "10px 0",
+                  cursor: generatingReceipt ? "default" : "pointer",
+                  opacity: generatingReceipt ? 0.7 : 1,
+                }}
+              >
+                {generatingReceipt ? <Spinner /> : "Generate receipt"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Settlement history ── */}
       <h2 style={{ fontSize: 17, marginTop: 32 }}>Settlement history</h2>
       {!initialLoading && history.length === 0 && <p style={{ color: "#888", fontSize: 13.5 }}>No settlements recorded yet.</p>}
@@ -976,27 +1182,25 @@ export default function SettlePage() {
                   </div>
                   <div className="flex gap-1.5 items-center flex-wrap">
                     <span
-                      className={`text-[11px] px-1.5 py-0.5 rounded ${
-                        h.paymentMethod === "cash"
-                          ? "bg-[#451a03] text-[#fb923c]"
-                          : "bg-[#172554] text-[#60a5fa]"
-                      }`}
+                      className={`text-[11px] px-1.5 py-0.5 rounded ${h.paymentMethod === "cash"
+                        ? "bg-[#451a03] text-[#fb923c]"
+                        : "bg-[#172554] text-[#60a5fa]"
+                        }`}
                     >
                       {h.paymentMethod === "cash" ? "💵 Cash" : "📱 UPI"}
                     </span>
                     <span
-                      className={`text-[11px] px-1.5 py-0.5 rounded ${
-                        h.status === "both_confirmed"
-                          ? "bg-[#14532d] text-[#86efac]"
-                          : h.status === "disputed"
+                      className={`text-[11px] px-1.5 py-0.5 rounded ${h.status === "both_confirmed"
+                        ? "bg-[#14532d] text-[#86efac]"
+                        : h.status === "disputed"
                           ? "bg-[#450a0a] text-[#fca5a5]"
                           : "bg-[#1c1917] text-[#a8a29e]"
-                      }`}
+                        }`}
                     >
                       {h.status === "both_confirmed" ? "✓ Settled" :
-                       h.status === "payer_confirmed" ? "⏳ Payer confirmed" :
-                       h.status === "payee_confirmed_first" ? "⏳ Payee confirmed" :
-                       h.status === "disputed" ? "⚠ Disputed" : "🕐 Pending"}
+                        h.status === "payer_confirmed" ? "⏳ Payer confirmed" :
+                          h.status === "payee_confirmed_first" ? "⏳ Payee confirmed" :
+                            h.status === "disputed" ? "⚠ Disputed" : "🕐 Pending"}
                     </span>
                   </div>
                 </div>
@@ -1104,11 +1308,45 @@ export default function SettlePage() {
                     </button>
                   </div>
                 )}
+
+                {/* Rent receipt — only shown once a settlement is fully confirmed,
+    and only to the payer (tenant), since they're the one requesting it */}
+                {h.status === "both_confirmed" && isPayer && (
+                  <div className="pt-1">
+                    {receipts[h.id] ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-[11px] px-1.5 py-0.5 rounded ${receipts[h.id].status === "signed"
+                            ? "bg-[#14532d] text-[#86efac]"
+                            : "bg-[#451a03] text-[#fb923c]"
+                            }`}
+                        >
+                          {receipts[h.id].status === "signed" ? "✓ Receipt signed" : "⏳ Receipt awaiting signature"}
+                        </span>
+                        <button
+                          onClick={() => downloadReceipt(receipts[h.id].id)}
+                          className="text-xs px-2.5 py-1.5"
+                        >
+                          ⬇ Download PDF
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => openReceiptDialog(h.id)}
+                        className="bg-transparent border border-[#1e3a5f] rounded-md text-[#93c5fd] text-xs px-2.5 py-1.5 cursor-pointer whitespace-nowrap"
+                      >
+                        🧾 Generate rent receipt
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       )}
+
+
     </div>
   );
 }

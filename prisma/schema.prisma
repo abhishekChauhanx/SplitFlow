@@ -27,6 +27,8 @@ model User {
   pushSubscriptions        PushSubscription[] // already had opposite issue - see below
   expensePayments          ExpensePayment[]   @relation("ExpensePayments") // NEW - fixes user error
   vendorProfile            Vendor?
+  tenantReceipts   RentReceipt[] @relation("TenantReceipts")
+  landlordReceipts RentReceipt[] @relation("LandlordReceipts")
 }
 
 model GroupInvite {
@@ -127,6 +129,7 @@ model Settlement {
   payeeConfirmedAt DateTime?
   disputeReason    String?
   createdAt        DateTime  @default(now())
+  rentReceipt RentReceipt?
 }
 
 model RecurringTemplate {
@@ -234,4 +237,23 @@ model VendorPayment {
   paidAt         DateTime?
   confirmedAt    DateTime?
   createdAt      DateTime         @default(now())
+}
+
+model RentReceipt {
+  id                String    @id @default(cuid())
+  settlementId      String    @unique
+  settlement        Settlement @relation(fields: [settlementId], references: [id])
+  tenantId          String
+  tenant            User      @relation("TenantReceipts", fields: [tenantId], references: [id])
+  landlordId        String
+  landlord          User      @relation("LandlordReceipts", fields: [landlordId], references: [id])
+  landlordPan       String?
+  propertyAddress   String
+  amountPaise       Int
+  paymentPeriodFrom DateTime
+  paymentPeriodTo   DateTime
+  utrNumber         String?
+  status            String    @default("pending_signature") // pending_signature | signed
+  signedAt          DateTime?
+  createdAt         DateTime  @default(now())
 }
