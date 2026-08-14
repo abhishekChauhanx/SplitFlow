@@ -132,18 +132,16 @@ export default function VendorDashboardPage() {
       if (!data || data.error) return;
       setVendor(data);
     } catch {
-      // ignore — will retry on next poll tick
+      // ignore — will retry next time a real trigger fires
     }
   }, []);
 
+  // No blind timer here on purpose — every fetch below is tied to an actual
+  // reason to refetch (initial load, tab regaining focus/visibility, or an
+  // action the user just took), not a fixed interval running in the background
+  // whether or not anything could plausibly have changed.
   useEffect(() => {
     load().finally(() => setInitialLoading(false));
-
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        silentReload();
-      }
-    }, 8000);
 
     function handleFocusOrVisible() {
       if (document.visibilityState === "visible") {
@@ -154,7 +152,6 @@ export default function VendorDashboardPage() {
     document.addEventListener("visibilitychange", handleFocusOrVisible);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener("focus", handleFocusOrVisible);
       document.removeEventListener("visibilitychange", handleFocusOrVisible);
     };
@@ -272,7 +269,7 @@ export default function VendorDashboardPage() {
     : null;
 
   return (
-    <div style={{ maxWidth: 1400, margin: "40px auto", padding: "0 24px" }}>
+    <div style={{ width: "100%", maxWidth: "100%", margin: "40px 0", padding: "0 32px", boxSizing: "border-box" }}>
       <SFLoaderOverlay visible={overlayVisible} label={overlayLabel} />
 
       {/* Header */}
@@ -366,13 +363,15 @@ export default function VendorDashboardPage() {
           </button>
         </div>
       ) : (
-        <VendorCollectionsGrid
-          collections={vendor.collections}
-          onEdit={goToEdit}
-          onDelete={handleDelete}
-          onView={setViewingCollectionId}
-          onCopyLink={handleCopyLink}
-        />
+        <div style={{ width: "100%" }}>
+          <VendorCollectionsGrid
+            collections={vendor.collections}
+            onEdit={goToEdit}
+            onDelete={handleDelete}
+            onView={setViewingCollectionId}
+            onCopyLink={handleCopyLink}
+          />
+        </div>
       )}
 
       {/* Subscribers dialog */}

@@ -320,46 +320,40 @@ export default function GroupDetailPage() {
       });
   }, [confirm, id]);
 
-  useEffect(() => {
-    fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    Promise.all([
-      loadExpenses(),
-      loadGroup(),
-      loadSummary(),
-      loadPendingRequests(),
-      loadMyPermissions(),
-      loadRecurringTemplates(),
-    ]).finally(() => setInitialLoading(false));
+ useEffect(() => {
+  fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
+  Promise.all([
+    loadExpenses(),
+    loadGroup(),
+    loadSummary(),
+    loadPendingRequests(),
+    loadMyPermissions(),
+    loadRecurringTemplates(),
+  ]).finally(() => setInitialLoading(false));
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadPendingRequests();
-        loadMyPermissions();
-      }
-    }, 8000);
-
-    // Refetch balances/expenses/recurring templates immediately when the
-    // user comes back to this tab/page (e.g. after settling a payment on
-    // /settle, or deleting/pausing a template on /recurring, and
-    // navigating back) instead of waiting for the next poll tick or a full
-    // remount.
-    function handleFocusOrVisible() {
-      if (document.visibilityState === "visible") {
-        loadSummary();
-        loadExpenses();
-        loadRecurringTemplates();
-      }
+  const interval = setInterval(() => {
+    if (document.visibilityState === "visible") {
+      loadPendingRequests();
+      loadMyPermissions();
     }
-    window.addEventListener("focus", handleFocusOrVisible);
-    document.addEventListener("visibilitychange", handleFocusOrVisible);
+  }, 8000);
 
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", handleFocusOrVisible);
-      document.removeEventListener("visibilitychange", handleFocusOrVisible);
-    };
-  }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
+  function handleFocusOrVisible() {
+    if (document.visibilityState === "visible") {
+      loadSummary();
+      loadExpenses();
+      loadRecurringTemplates();
+    }
+  }
+  window.addEventListener("focus", handleFocusOrVisible);
+  document.addEventListener("visibilitychange", handleFocusOrVisible);
 
+  return () => {
+    clearInterval(interval);
+    window.removeEventListener("focus", handleFocusOrVisible);
+    document.removeEventListener("visibilitychange", handleFocusOrVisible);
+  };
+}, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
   const refreshAll = useCallback(async () => {
     await Promise.all([
       loadExpenses(),
@@ -642,6 +636,7 @@ export default function GroupDetailPage() {
       setShareInputs({});
       setExpenseSplitType("EQUAL");
       setShowExpenseModal(false);
+      
       loadSummary();
     } finally {
       setAddingExpense(false);
