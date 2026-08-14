@@ -13,12 +13,6 @@ import GroupRecurringGrid from "@/components/GroupRecurringGrid";
 import NotificationBell from "@/components/NotificationBell";
 import type { GroupSummary } from "@/lib/group-summary";
 
-// Mirrors what /api/groups/[id]/recurring returns — used for the read-only
-// "Recurring expenses" summary table on the group page. Full create/edit/
-// pause/delete management still happens on the /recurring page; this table
-// just reflects current state and re-syncs automatically (see the
-// visibility/focus effect below) so a template deleted there disappears
-// here too without a manual refresh.
 type RecurringTemplateRow = {
   id: string;
   description: string;
@@ -32,6 +26,13 @@ type RecurringTemplateRow = {
     amountPaise: number;
     note?: string;
   } | null;
+};
+
+type PendingRequest = {
+  id: string;
+  action: string;
+  requestedBy: { name?: string | null; email?: string | null };
+  expense: { description: string; amountPaise: number };
 };
 
 // Shared dialog chrome — mirrors the existing "Edit expense" modal's look
@@ -223,7 +224,7 @@ export default function GroupDetailPage() {
   const [requestingPermissionId, setRequestingPermissionId] = useState<string | null>(null);
 
   // Permission system state
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]); // for owner
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]); // for owner
   const [myPermissions, setMyPermissions] = useState<Record<string, string>>({}); // expenseId -> status
   const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, string>>({}); // expenseId -> permissionId
 
@@ -319,46 +320,40 @@ export default function GroupDetailPage() {
       });
   }, [confirm, id]);
 
-  useEffect(() => {
-    fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    Promise.all([
-      loadExpenses(),
-      loadGroup(),
-      loadSummary(),
-      loadPendingRequests(),
-      loadMyPermissions(),
-      loadRecurringTemplates(),
-    ]).finally(() => setInitialLoading(false));
+ useEffect(() => {
+  fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
+  Promise.all([
+    loadExpenses(),
+    loadGroup(),
+    loadSummary(),
+    loadPendingRequests(),
+    loadMyPermissions(),
+    loadRecurringTemplates(),
+  ]).finally(() => setInitialLoading(false));
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadPendingRequests();
-        loadMyPermissions();
-      }
-    }, 8000);
-
-    // Refetch balances/expenses/recurring templates immediately when the
-    // user comes back to this tab/page (e.g. after settling a payment on
-    // /settle, or deleting/pausing a template on /recurring, and
-    // navigating back) instead of waiting for the next poll tick or a full
-    // remount.
-    function handleFocusOrVisible() {
-      if (document.visibilityState === "visible") {
-        loadSummary();
-        loadExpenses();
-        loadRecurringTemplates();
-      }
+  const interval = setInterval(() => {
+    if (document.visibilityState === "visible") {
+      loadPendingRequests();
+      loadMyPermissions();
     }
-    window.addEventListener("focus", handleFocusOrVisible);
-    document.addEventListener("visibilitychange", handleFocusOrVisible);
+  }, 8000);
 
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", handleFocusOrVisible);
-      document.removeEventListener("visibilitychange", handleFocusOrVisible);
-    };
-  }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
+  function handleFocusOrVisible() {
+    if (document.visibilityState === "visible") {
+      loadSummary();
+      loadExpenses();
+      loadRecurringTemplates();
+    }
+  }
+  window.addEventListener("focus", handleFocusOrVisible);
+  document.addEventListener("visibilitychange", handleFocusOrVisible);
 
+  return () => {
+    clearInterval(interval);
+    window.removeEventListener("focus", handleFocusOrVisible);
+    document.removeEventListener("visibilitychange", handleFocusOrVisible);
+  };
+}, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
   const refreshAll = useCallback(async () => {
     await Promise.all([
       loadExpenses(),
@@ -379,7 +374,10 @@ export default function GroupDetailPage() {
     loadPendingRequests();
   }
 
-  // e) Request edit access — replaces alert() with modal, adds per-expense loading
+  // e) Request edit access — replaces alert() with modal, adds per-expense loading.
+  // The overlay is cleared *before* any confirm()/info dialog is awaited —
+  // otherwise the full-page loader stays on top of the dialog and blocks
+  // clicks on its buttons until the dialog itself resolves.
   async function requestEditPermission(expenseId: string, action: string) {
     setRequestingPermissionId(expenseId);
     try {
@@ -399,26 +397,31 @@ export default function GroupDetailPage() {
           setEditPaidById(expense.paidById);
         }
       } else if (data.reason === "already_pending") {
+        setRequestingPermissionId(null);
         await confirm({
           title: "Already requested",
           message: "You've already requested this — waiting on the expense creator to respond.",
           mode: "alert",
         });
         setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+        return;
       } else {
+        setRequestingPermissionId(null);
         await confirm({
           title: "Request sent",
           message: "The creator of this expense has been notified. You'll see an update here once they respond.",
           mode: "alert",
         });
         setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+        return;
       }
     } finally {
       setRequestingPermissionId(null);
     }
   }
 
-  // e) Delete expense — native confirm() replaced with modal, adds per-expense loading
+  // e) Delete expense — native confirm() replaced with modal, adds per-expense loading.
+  // Same overlay-before-dialog fix as above.
   async function deleteExpense(expenseId: string) {
     const ok = await confirm({
       title: "Delete expense?",
@@ -433,9 +436,11 @@ export default function GroupDetailPage() {
       if (!res.ok) {
         const data = await res.json();
         if (data.error === "permission_required") {
+          setDeletingExpenseId(null);
           await requestEditPermission(expenseId, "delete");
           return;
         }
+        setDeletingExpenseId(null);
         await confirm({ title: "Couldn't delete", message: data.error, mode: "alert" });
         return;
       }
@@ -447,7 +452,8 @@ export default function GroupDetailPage() {
     }
   }
 
-  // e) Save edit — alert() replaced with modal, adds loading
+  // e) Save edit — alert() replaced with modal, adds loading.
+  // Same overlay-before-dialog fix as above.
   async function saveEditExpense(expenseId: string) {
     const ok = await confirm({
       title: "Save changes?",
@@ -470,6 +476,7 @@ export default function GroupDetailPage() {
       if (!res.ok) {
         const d = await res.json();
         if (d.error === "permission_required") {
+          setSavingEdit(false);
           await confirm({
             title: "Permission needed",
             message: "You need permission from the expense creator to edit this.",
@@ -477,6 +484,7 @@ export default function GroupDetailPage() {
           });
           return;
         }
+        setSavingEdit(false);
         await confirm({ title: "Couldn't save", message: d.error, mode: "alert" });
         return;
       }
@@ -628,6 +636,7 @@ export default function GroupDetailPage() {
       setShareInputs({});
       setExpenseSplitType("EQUAL");
       setShowExpenseModal(false);
+      
       loadSummary();
     } finally {
       setAddingExpense(false);
@@ -727,10 +736,32 @@ export default function GroupDetailPage() {
           <h1 style={{ margin: 0 }}>Group</h1>
           <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
         </div>
-        <NotificationBell
-          requests={pendingRequests}
-          onApprove={(reqId) => respondToRequest(reqId, "approved")}
-          onDeny={(reqId) => respondToRequest(reqId, "denied")}
+        <NotificationBell<PendingRequest>
+          items={pendingRequests}
+          getKey={(req) => req.id}
+          renderItem={(req) => (
+            <>
+              <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
+                <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
+                <strong>{req.action}</strong> "{req.expense.description}" — ₹
+                {(req.expense.amountPaise / 100).toFixed(2)}
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => respondToRequest(req.id, "approved")}
+                  style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  onClick={() => respondToRequest(req.id, "denied")}
+                  style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                >
+                  ✗ Deny
+                </button>
+              </div>
+            </>
+          )}
         />
       </div>
 

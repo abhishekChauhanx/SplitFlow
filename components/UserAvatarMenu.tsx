@@ -87,9 +87,11 @@ export default function UserAvatarMenu({
           >
             Information
           </button>
-        
-            <Link href="/account" style={{ fontSize: 13, color: "#888" }}>Account</Link>
-        
+
+          <Link href="/account" style={{ fontSize: 13, color: "#888" }}>Account</Link>
+          <Link href="/vendor/dashboard" style={{ fontSize: 13, color: "#888" }}>
+            Vendor portal
+          </Link>
           <button
             onClick={() => {
               setOpen(false);

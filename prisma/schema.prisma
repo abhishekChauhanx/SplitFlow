@@ -12,6 +12,7 @@ model User {
   name                     String?
   phone                    String?
   upiId                    String?
+  role                     String             @default("member") // "member" | "vendor"
   isPlaceholder            Boolean            @default(false)
   isDeleted                Boolean            @default(false)
   deletedAt                DateTime?
@@ -25,6 +26,7 @@ model User {
   editPermissionsOwned     EditPermission[]   @relation("OwnedPermissions")
   pushSubscriptions        PushSubscription[] // already had opposite issue - see below
   expensePayments          ExpensePayment[]   @relation("ExpensePayments") // NEW - fixes user error
+  vendorProfile            Vendor?
 }
 
 model GroupInvite {
@@ -176,4 +178,60 @@ model PushSubscription {
   p256dh    String
   auth      String
   createdAt DateTime @default(now())
+}
+
+model Vendor {
+  id            String              @id @default(cuid())
+  userId        String              @unique
+  user          User                @relation(fields: [userId], references: [id])
+  businessName  String              // e.g. "Sharma Mess", "Green Valley Apartments"
+  businessType  String              // "mess" | "landlord" | "other"
+  panNumber     String?             // for HRA receipts later
+  upiId         String?             // where tenants pay
+  createdAt     DateTime            @default(now())
+  collections   VendorCollection[]
+}
+
+model VendorCollection {
+  id              String                    @id @default(cuid())
+  vendorId        String
+  vendor          Vendor                    @relation(fields: [vendorId], references: [id])
+  title           String
+  amountPaise     Int
+  dueDate         DateTime?
+  cycleMonth      String?
+  token           String                    @unique @default(cuid())
+  openEnrollment  Boolean                   @default(false) // if true, anyone with the link can join as a new subscriber; if false (default), only pre-added subscribers can pay
+  createdAt       DateTime                  @default(now())
+  subscribers     VendorSubscriber[]
+  payments        VendorPayment[]
+}
+
+model VendorSubscriber {
+  id            String           @id @default(cuid())
+  collection    VendorCollection @relation(fields: [collectionId], references: [id])
+  collectionId  String
+  userId        String?
+  name          String
+  email         String?
+  phone         String?
+  createdAt     DateTime         @default(now())
+  payment       VendorPayment?
+
+  @@unique([collectionId, email])
+}
+
+model VendorPayment {
+  id             String           @id @default(cuid())
+  collection     VendorCollection @relation(fields: [collectionId], references: [id])
+  collectionId   String
+  subscriber     VendorSubscriber @relation(fields: [subscriberId], references: [id])
+  subscriberId   String           @unique
+  amountPaise    Int
+  paymentMethod  String           @default("upi") // "upi" | "cash"
+  utrNumber      String?
+  status         String           @default("pending") // "pending" | "paid" | "confirmed"
+  paidAt         DateTime?
+  confirmedAt    DateTime?
+  createdAt      DateTime         @default(now())
 }
