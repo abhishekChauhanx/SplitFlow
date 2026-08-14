@@ -111,7 +111,7 @@ export default function VendorDashboardPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [navLabel, setNavLabel] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
+  const [decidingPaymentId, setDecidingPaymentId] = useState<string | null>(null);
   const [viewingCollectionId, setViewingCollectionId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -196,12 +196,37 @@ export default function VendorDashboardPage() {
   }
 
   async function handleConfirmPayment(paymentId: string) {
-    setConfirmingPaymentId(paymentId);
+    setDecidingPaymentId(paymentId);
     try {
-      await fetch(`/api/vendor/payments/${paymentId}/confirm`, { method: "POST" });
+      await fetch(`/api/vendor/payments/${paymentId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "confirmed" }),
+      });
       await load();
     } finally {
-      setConfirmingPaymentId(null);
+      setDecidingPaymentId(null);
+    }
+  }
+
+  async function handleRejectPayment(paymentId: string, subscriberName: string) {
+    const ok = await confirm({
+      title: "Reject this payment?",
+      message: `Mark ${subscriberName}'s payment as not received? They'll be able to submit a payment again.`,
+      confirmLabel: "Reject",
+    });
+    if (!ok) return;
+
+    setDecidingPaymentId(paymentId);
+    try {
+      await fetch(`/api/vendor/payments/${paymentId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "rejected" }),
+      });
+      await load();
+    } finally {
+      setDecidingPaymentId(null);
     }
   }
 
@@ -268,24 +293,36 @@ export default function VendorDashboardPage() {
             getKey={(p) => p.paymentId}
             emptyMessage="Nothing needs your attention."
             renderItem={(p) => (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                 <div>
                   <p style={{ margin: 0, fontSize: 13, color: "#eee" }}>
                     {p.subscriberName} paid ₹{(p.amountPaise / 100).toFixed(0)}
                   </p>
                   <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>{p.collectionTitle}</p>
                 </div>
-                <button
-                  onClick={() => handleConfirmPayment(p.paymentId)}
-                  disabled={confirmingPaymentId === p.paymentId}
-                  style={{
-                    fontSize: 11, background: "#14532d", color: "#86efac", border: "none",
-                    borderRadius: 4, padding: "4px 10px", cursor: "pointer", flexShrink: 0,
-                    display: "flex", alignItems: "center", gap: 4,
-                  }}
-                >
-                  {confirmingPaymentId === p.paymentId ? <Spinner /> : "Confirm"}
-                </button>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => handleConfirmPayment(p.paymentId)}
+                    disabled={decidingPaymentId === p.paymentId}
+                    style={{
+                      fontSize: 11, background: "#14532d", color: "#86efac", border: "none",
+                      borderRadius: 4, padding: "4px 10px", cursor: "pointer",
+                      display: "flex", alignItems: "center", gap: 4,
+                    }}
+                  >
+                    {decidingPaymentId === p.paymentId ? <Spinner /> : "Confirm"}
+                  </button>
+                  <button
+                    onClick={() => handleRejectPayment(p.paymentId, p.subscriberName)}
+                    disabled={decidingPaymentId === p.paymentId}
+                    style={{
+                      fontSize: 11, background: "#450a0a", color: "#fca5a5", border: "none",
+                      borderRadius: 4, padding: "4px 10px", cursor: "pointer",
+                    }}
+                  >
+                    Reject
+                  </button>
+                </div>
               </div>
             )}
           />
@@ -377,10 +414,17 @@ export default function VendorDashboardPage() {
                       <span style={{ fontSize: 12, color: "#f59e0b" }}>⏳ Paid — awaiting confirmation</span>
                       <button
                         onClick={() => handleConfirmPayment(s.payment.id)}
-                        disabled={confirmingPaymentId === s.payment.id}
+                        disabled={decidingPaymentId === s.payment.id}
                         style={{ fontSize: 11, background: "#14532d", color: "#86efac", border: "none", borderRadius: 4, padding: "2px 8px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
                       >
-                        {confirmingPaymentId === s.payment.id ? <Spinner /> : "Confirm receipt"}
+                        {decidingPaymentId === s.payment.id ? <Spinner /> : "Confirm receipt"}
+                      </button>
+                      <button
+                        onClick={() => handleRejectPayment(s.payment.id, s.name)}
+                        disabled={decidingPaymentId === s.payment.id}
+                        style={{ fontSize: 11, background: "#450a0a", color: "#fca5a5", border: "none", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}
+                      >
+                        Reject
                       </button>
                     </>
                   )}
