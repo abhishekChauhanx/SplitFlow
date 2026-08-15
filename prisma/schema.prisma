@@ -12,7 +12,7 @@ model User {
   name                     String?
   phone                    String?
   upiId                    String?
-  role                     String             @default("member") // "member" | "vendor"
+  role                     String             @default("member")
   isPlaceholder            Boolean            @default(false)
   isDeleted                Boolean            @default(false)
   deletedAt                DateTime?
@@ -20,13 +20,14 @@ model User {
   updatedAt                DateTime           @updatedAt
   groups                   GroupMember[]
   expensesPaid             Expense[]          @relation("PaidBy")
-  createdExpenses          Expense[]          @relation("CreatedExpenses") // NEW - fixes createdBy error
+  createdExpenses          Expense[]          @relation("CreatedExpenses")
   splits                   ExpenseSplit[]
   editPermissionsRequested EditPermission[]   @relation("RequestedPermissions")
   editPermissionsOwned     EditPermission[]   @relation("OwnedPermissions")
-  pushSubscriptions        PushSubscription[] // already had opposite issue - see below
-  expensePayments          ExpensePayment[]   @relation("ExpensePayments") // NEW - fixes user error
+  pushSubscriptions        PushSubscription[]
+  expensePayments          ExpensePayment[]   @relation("ExpensePayments")
   vendorProfile            Vendor?
+  vendorSubscriptions      VendorSubscriber[] @relation("VendorSubscriptions") // NEW
 }
 
 model GroupInvite {
@@ -211,14 +212,14 @@ model VendorSubscriber {
   id            String           @id @default(cuid())
   collection    VendorCollection @relation(fields: [collectionId], references: [id])
   collectionId  String
-  userId        String?
+  userId        String? // nullable now — null until the invited person logs in and claims it
+  user          User?            @relation("VendorSubscriptions", fields: [userId], references: [id])
   name          String
-  email         String?
-  phone         String?
+  invitedEmail  String? // set when the vendor pre-adds someone by email, before they've claimed it
   createdAt     DateTime         @default(now())
   payment       VendorPayment?
 
-  @@unique([collectionId, email])
+  @@unique([collectionId, userId])
 }
 
 model VendorPayment {

@@ -2,35 +2,30 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
 
-// GET — preview the collection, optionally check a specific email's status
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   const { token } = await params;
-  const emailParam = req.nextUrl.searchParams.get("email");
-  const email = emailParam?.trim().toLowerCase() || null;
+  const userId = await getSessionUserId();
 
   const collection = await prisma.vendorCollection.findUnique({
     where: { token },
     include: {
-      vendor: { include: { user: { select: { name: true, email: true } } } },
+      vendor: { include: { user: { select: { name: true } } } },
       subscribers: { include: { payment: true } },
     },
   });
 
   if (!collection) return NextResponse.json({ error: "Invalid collection link" }, { status: 404 });
 
-  let emailStatus: { alreadyPaid: boolean; subscriberName: string } | null = null;
-  if (email) {
-    const match = collection.subscribers.find((s) => s.email?.toLowerCase() === email);
-    if (match) {
-      emailStatus = {
-        alreadyPaid: match.payment?.status === "paid" || match.payment?.status === "confirmed",
-        subscriberName: match.name,
-      };
-    }
+  // Since proxy.ts now blocks /pay/[token] for unauthenticated visitors,
+  // userId should always be set here — but check defensively anyway.
+  if (!userId) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  const mySubscription = collection.subscribers.find((s) => s.userId === userId);
 
   return NextResponse.json({
     collectionId: collection.id,
@@ -40,8 +35,10 @@ export async function GET(
     vendorName: collection.vendor.businessName,
     vendorUpiId: collection.vendor.upiId,
     subscriberCount: collection.subscribers.length,
-    paidCount: collection.subscribers.filter((s) => s.payment?.status === "paid" || s.payment?.status === "confirmed").length,
-    emailStatus,
+    paidCount: collection.subscribers.filter(
+      (s) => s.payment?.status === "paid" || s.payment?.status === "confirmed"
+    ).length,
+    myPaymentStatus: mySubscription?.payment?.status || null,
   });
 }
 
@@ -49,82 +46,92 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
-  const { token } = await params;
-  const userId = await getSessionUserId();
+  try {
+    const { token } = await params;
+    const userId = await getSessionUserId();
 
-  const collection = await prisma.vendorCollection.findUnique({
-    where: { token },
-    include: { subscribers: { include: { payment: true } } },
-  });
-  if (!collection) return NextResponse.json({ error: "Invalid collection link" }, { status: 404 });
+    if (!userId) {
+      return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+    }
 
-  const { subscriberId, amountPaise, paymentMethod, utrNumber, name, email } = await req.json();
-  const normalizedEmail = email?.trim().toLowerCase() || null;
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
+    }
 
-  let subscriber;
+    const collection = await prisma.vendorCollection.findUnique({
+      where: { token },
+      include: { subscribers: { include: { payment: true } } },
+    });
 
-  if (subscriberId) {
-    subscriber = collection.subscribers.find((s) => s.id === subscriberId);
-    if (!subscriber) return NextResponse.json({ error: "Subscriber not found" }, { status: 404 });
-  } else {
-    // Match against the EMAIL THE PERSON TYPED into the form first — this
-    // is the field the vendor's subscriber list is keyed on, and it's what
-    // the person filling the form is actually asserting. Do NOT substitute
-    // their logged-in session email here: someone can be logged into the
-    // app under one account while paying on behalf of / entering a
-    // different subscriber's email that the vendor added, and that must
-    // still match.
-    if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    if (!normalizedEmail) return NextResponse.json({ error: "Email is required" }, { status: 400 });
+    if (!collection) {
+      return NextResponse.json({ error: "Invalid collection link" }, { status: 404 });
+    }
 
-    const existing = collection.subscribers.find((s) => s.email?.toLowerCase() === normalizedEmail);
+    const { utrNumber, paymentMethod } = await req.json();
 
-    if (existing) {
-      subscriber = existing;
-      // If they're logged in and this subscriber row isn't linked to a
-      // user yet, link it now — but only because the typed email already
-      // matched a real subscriber, not as a way to create new ones.
-      if (userId && !existing.userId) {
-        subscriber = await prisma.vendorSubscriber.update({ where: { id: existing.id }, data: { userId } });
-      }
-    } else if (collection.openEnrollment) {
-      try {
-        subscriber = await prisma.vendorSubscriber.create({
-          data: { collectionId: collection.id, name: name.trim(), email: normalizedEmail, userId: userId || null },
+    // 1. Already claimed by this exact user? Use that record.
+    let subscriber = collection.subscribers.find((s) => s.userId === userId) || null;
+
+    // 2. Not yet claimed — check if the vendor pre-invited this person's email.
+    //    If so, CLAIM that pending row instead of creating a new one.
+    if (!subscriber && user.email) {
+      const pendingInvite = collection.subscribers.find(
+        (s) => !s.userId && s.invitedEmail?.toLowerCase() === user.email!.toLowerCase()
+      );
+      if (pendingInvite) {
+        subscriber = await prisma.vendorSubscriber.update({
+          where: { id: pendingInvite.id },
+          data: { userId, name: user.name || user.email }, // fill in real name/account now
+          include: { payment: true },
         });
-      } catch (e: any) {
-        if (e.code === "P2002") {
-          return NextResponse.json({ error: "This email is already registered for this collection" }, { status: 409 });
-        }
-        throw e;
       }
-    } else {
+    }
+
+    // 3. No existing or pending record — only allow a brand-new subscriber
+    //    if this collection is open enrollment.
+    if (!subscriber) {
+      if (!collection.openEnrollment) {
+        return NextResponse.json(
+          { error: "This collection is invite-only. Ask the vendor to add you as a subscriber first." },
+          { status: 403 }
+        );
+      }
+      subscriber = await prisma.vendorSubscriber.create({
+        data: {
+          collectionId: collection.id,
+          userId,
+          name: user.name || user.email || "Unknown",
+        },
+        include: { payment: true },
+      });
+    }
+
+    if (subscriber.payment) {
       return NextResponse.json(
-        { error: "This email isn't on the subscriber list for this collection. Contact the vendor to be added." },
-        { status: 403 }
+        { error: "You've already recorded a payment for this collection" },
+        { status: 409 }
       );
     }
-  }
 
-  const existingPayment = await prisma.vendorPayment.findUnique({ where: { subscriberId: subscriber.id } });
-  if (existingPayment) {
+    const payment = await prisma.vendorPayment.create({
+      data: {
+        collectionId: collection.id,
+        subscriberId: subscriber.id,
+        amountPaise: collection.amountPaise,
+        paymentMethod: paymentMethod === "cash" ? "cash" : "upi",
+        utrNumber: utrNumber || null,
+        status: "paid",
+        paidAt: new Date(),
+      },
+    });
+
+    return NextResponse.json({ ok: true, payment });
+  } catch (err) {
+    console.error("Vendor payment recording failed:", err);
     return NextResponse.json(
-      { error: `A payment for this email has already been recorded (under the name "${subscriber.name}").` },
-      { status: 409 }
+      { error: "Something went wrong recording your payment. Please try again." },
+      { status: 500 }
     );
   }
-
-  const payment = await prisma.vendorPayment.create({
-    data: {
-      collectionId: collection.id,
-      subscriberId: subscriber.id,
-      amountPaise: amountPaise || collection.amountPaise,
-      paymentMethod: paymentMethod || "upi",
-      utrNumber: utrNumber || null,
-      status: "paid",
-      paidAt: new Date(),
-    },
-  });
-
-  return NextResponse.json({ ok: true, payment });
 }
