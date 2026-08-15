@@ -6,6 +6,9 @@ import { getSessionUserId } from "@/lib/session";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  const group = await prisma.group.findUnique({ where: { id }, select: { groupType: true } });
+
   const net = await getRawBalances(id);
   const transactions = simplifyDebts(net);
 
@@ -22,6 +25,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     toName: userMap[t.toUserId]?.name || userMap[t.toUserId]?.email,
     toUpiId: userMap[t.toUserId]?.upiId || null,
     amountPaise: t.amountPaise,
+    groupType: group?.groupType || "trip", // NEW — carried on every suggestion
   }));
 
   return NextResponse.json(suggestions);

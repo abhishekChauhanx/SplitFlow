@@ -10,10 +10,21 @@ export async function POST(
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const settlement = await prisma.settlement.findUnique({ where: { id } });
+  const settlement = await prisma.settlement.findUnique({
+    where: { id },
+    include: { group: { select: { groupType: true } } } // NOTE: requires a group relation on Settlement — see below if missing
+  });
+
   if (!settlement) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Only allow generating a receipt for a fully confirmed settlement
+  // NEW: hard-block receipt generation outside rent-type groups
+  if (settlement.group?.groupType !== "rent") {
+    return NextResponse.json(
+      { error: "Rent receipts can only be generated in Flat/Rent type groups" },
+      { status: 400 }
+    );
+  }
+
   if (settlement.status !== "both_confirmed") {
     return NextResponse.json(
       { error: "Receipts can only be generated after both sides confirm the payment" },
@@ -21,7 +32,6 @@ export async function POST(
     );
   }
 
-  // Only the payer (tenant) can request a receipt
   if (settlement.fromUserId !== userId) {
     return NextResponse.json({ error: "Only the payer can request a receipt" }, { status: 403 });
   }
@@ -38,7 +48,6 @@ export async function POST(
     );
   }
 
-  // Look up landlord's PAN if they have a vendor profile
   const landlordVendor = await prisma.vendor.findUnique({
     where: { userId: settlement.toUserId },
   });

@@ -1311,22 +1311,19 @@ export default function SettlePage() {
 
                 {/* Rent receipt — only shown once a settlement is fully confirmed,
     and only to the payer (tenant), since they're the one requesting it */}
-                {h.status === "both_confirmed" && isPayer && (
+                {h.status === "both_confirmed" && isPayer && h.groupType === "rent" && (
                   <div className="pt-1">
                     {receipts[h.id] ? (
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
                           className={`text-[11px] px-1.5 py-0.5 rounded ${receipts[h.id].status === "signed"
-                            ? "bg-[#14532d] text-[#86efac]"
-                            : "bg-[#451a03] text-[#fb923c]"
+                              ? "bg-[#14532d] text-[#86efac]"
+                              : "bg-[#451a03] text-[#fb923c]"
                             }`}
                         >
                           {receipts[h.id].status === "signed" ? "✓ Receipt signed" : "⏳ Receipt awaiting signature"}
                         </span>
-                        <button
-                          onClick={() => downloadReceipt(receipts[h.id].id)}
-                          className="text-xs px-2.5 py-1.5"
-                        >
+                        <button onClick={() => downloadReceipt(receipts[h.id].id)} className="text-xs px-2.5 py-1.5">
                           ⬇ Download PDF
                         </button>
                       </div>

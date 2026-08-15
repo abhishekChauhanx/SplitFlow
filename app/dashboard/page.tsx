@@ -23,7 +23,7 @@ export default function DashboardPage() {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [showInfoOverlay, setShowInfoOverlay] = useState(false);
-
+  const [newGroupType, setNewGroupType] = useState("trip");
   const loadGroups = useCallback(async () => {
     const res = await fetch("/api/groups");
     const data = await res.json();
@@ -49,43 +49,43 @@ export default function DashboardPage() {
   }, [refreshAll]);
 
   async function createGroup() {
-    const trimmedName = newGroupName.trim();
-    if (!trimmedName) return;
+  const trimmedName = newGroupName.trim();
+  if (!trimmedName) return;
 
-    const duplicate = groups.find(
-      (g) => g.name.trim().toLowerCase() === trimmedName.toLowerCase()
-    );
-    if (duplicate) {
-      await confirm({
-        title: "Group already exists",
-        message: `"${trimmedName}" group already exists — please try a different name.`,
-        mode: "alert",
-      });
-      return;
-    }
-
-    const ok = await confirm({
-      title: "Create group?",
-      message: `Are you sure you want to create the group "${trimmedName}"?`,
-      confirmLabel: "Create",
+  const duplicate = groups.find(
+    (g) => g.name.trim().toLowerCase() === trimmedName.toLowerCase()
+  );
+  if (duplicate) {
+    await confirm({
+      title: "Group already exists",
+      message: `"${trimmedName}" group already exists — please try a different name.`,
+      mode: "alert",
     });
-    if (!ok) return;
-
-    setCreatingGroup(true);
-    try {
-      const res = await fetch("/api/groups", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmedName }),
-      });
-      const group = await res.json();
-      setGroups([...groups, group]);
-      setNewGroupName("");
-      await loadSummary(); // new group starts with zero activity but should appear
-    } finally {
-      setCreatingGroup(false);
-    }
+    return;
   }
+
+  const ok = await confirm({
+    title: "Create group?",
+    message: `Create "${trimmedName}" as a ${newGroupType === "rent" ? "flat/rent" : "trip/casual"} group?`,
+    confirmLabel: "Create",
+  });
+  if (!ok) return;
+
+  setCreatingGroup(true);
+  try {
+    const res = await fetch("/api/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmedName, groupType: newGroupType }),
+    });
+    const group = await res.json();
+    setGroups([...groups, group]);
+    setNewGroupName("");
+    setNewGroupType("trip");
+  } finally {
+    setCreatingGroup(false);
+  }
+}
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -124,23 +124,30 @@ export default function DashboardPage() {
   </button>
 )}
       <div style={{ display: "flex", gap: 8, margin: "16px 0 24px" }}>
-        <input
-          placeholder="New group name"
-          value={newGroupName}
-          onChange={(e) => setNewGroupName(e.target.value)}
-        />
-        <button onClick={createGroup} disabled={!newGroupName || creatingGroup}>
-          {creatingGroup ? <Spinner /> : "Create"}
-        </button>
-      </div>
+  <input
+    placeholder="New group name"
+    value={newGroupName}
+    onChange={(e) => setNewGroupName(e.target.value)}
+  />
+  <select value={newGroupType} onChange={(e) => setNewGroupType(e.target.value)}>
+    <option value="trip">🎉 Trip / Casual</option>
+    <option value="rent">🏠 Flat / Rent</option>
+  </select>
+  <button onClick={createGroup} disabled={!newGroupName || creatingGroup}>
+    {creatingGroup ? <Spinner /> : "Create"}
+  </button>
+</div>
 
       <ul>
-        {groups.map((g) => (
-          <li key={g.id}>
-            <Link href={`/groups/${g.id}`}>{g.name}</Link>
-          </li>
-        ))}
-      </ul>
+  {groups.map((g) => (
+    <li key={g.id}>
+      <Link href={`/groups/${g.id}`}>{g.name}</Link>
+      <span style={{ fontSize: 11, color: "#888", marginLeft: 6 }}>
+        {g.groupType === "rent" ? "🏠 rent" : "🎉 trip"}
+      </span>
+    </li>
+  ))}
+</ul>
 
       {showInfoOverlay && (
         <TableOverlay title="Your groups summary" onClose={() => setShowInfoOverlay(false)}>

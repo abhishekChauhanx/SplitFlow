@@ -44,10 +44,12 @@ model GroupInvite {
 model Group {
   id        String        @id @default(cuid())
   name      String
+  groupType String        @default("trip") // "trip" | "rent"
   createdAt DateTime      @default(now())
   members   GroupMember[]
   expenses  Expense[]
   invites   GroupInvite[]
+  settlements Settlement[]  // NEW back-relation
 }
 
 model Expense {
@@ -119,6 +121,7 @@ model OtpCode {
 model Settlement {
   id               String    @id @default(cuid())
   groupId          String
+   group            Group      @relation(fields: [groupId], references: [id])
   fromUserId       String
   toUserId         String
   amountPaise      Int
