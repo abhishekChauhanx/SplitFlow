@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
-import { sendPushToUser } from "@/lib/webpush";
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id } = await params;
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const settlement = await prisma.settlement.findUnique({ where: { id } });
+  const settlement = await prisma.settlement.findUnique({
+    where: { id },
+    include: { group: { select: { groupType: true, propertyAddress: true } } },
+  });
   if (!settlement) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const isPayer = settlement.fromUserId === userId;
@@ -16,7 +22,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Not part of this settlement" }, { status: 403 });
   }
 
-  // Idempotent: if this side already confirmed, just return current state, don't double-process
   if (isPayer && settlement.payerConfirmedAt) {
     return NextResponse.json(settlement);
   }
@@ -34,24 +39,48 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   updateData.status = otherSideAlreadyConfirmed ? "both_confirmed" : "payer_confirmed";
   if (isPayee && !settlement.payerConfirmedAt) {
-    updateData.status = "payee_confirmed_first"; // rare case: payee confirms before payer
+    updateData.status = "payee_confirmed_first";
   }
 
   const updated = await prisma.settlement.update({
     where: { id },
     data: updateData,
   });
-const notifyUserId = isPayer ? settlement.toUserId : settlement.fromUserId;
-const message = updated.status === "both_confirmed"
-  ? "Both sides confirmed — settlement complete! ✓"
-  : isPayer
-    ? "Payer confirmed — please confirm on your side to complete."
-    : "Payee confirmed — waiting for payer to confirm.";
 
-await sendPushToUser(notifyUserId, {
-  title: "Settlement update",
-  body: message,
-  url: `/groups/${settlement.groupId}/settle`,
-}).catch(() => {});
+  // ── NEW: auto-generate rent receipt the moment both sides confirm ──
+  // Only fires for "rent" type groups, and only if a receipt doesn't already exist
+  if (updated.status === "both_confirmed" && settlement.group.groupType === "rent") {
+    const existingReceipt = await prisma.rentReceipt.findUnique({
+      where: { settlementId: id },
+    });
+
+    if (!existingReceipt) {
+      // Infer the payment period as the calendar month the settlement was created in.
+      // This is a reasonable default for monthly rent — no manual date entry needed.
+      const createdAt = settlement.createdAt;
+      const periodFrom = new Date(createdAt.getFullYear(), createdAt.getMonth(), 1);
+      const periodTo = new Date(createdAt.getFullYear(), createdAt.getMonth() + 1, 0);
+
+      const landlordVendor = await prisma.vendor.findUnique({
+        where: { userId: settlement.toUserId },
+      });
+
+      await prisma.rentReceipt.create({
+        data: {
+          settlementId: id,
+          tenantId: settlement.fromUserId,
+          landlordId: settlement.toUserId,
+          landlordPan: landlordVendor?.panNumber || null,
+          propertyAddress: settlement.group.propertyAddress || "Address not set",
+          amountPaise: settlement.amountPaise,
+          paymentPeriodFrom: periodFrom,
+          paymentPeriodTo: periodTo,
+          utrNumber: settlement.utrNumber,
+          status: "pending_signature",
+        },
+      });
+    }
+  }
+
   return NextResponse.json(updated);
 }

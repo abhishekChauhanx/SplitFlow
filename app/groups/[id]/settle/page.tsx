@@ -76,15 +76,14 @@ export default function SettlePage() {
   }, [id]);
 
   const loadReceipts = useCallback(async () => {
-    const res = await fetch("/api/rent-receipts");
-    if (!res.ok) return;
-    const data = await res.json();
-    // Build a lookup by settlementId so each history card can check
-    // "does this settlement already have a receipt?" in O(1)
-    const map: Record<string, any> = {};
-    data.asTenant?.forEach((r: any) => { map[r.settlementId] = r; });
-    setReceipts(map);
-  }, []);
+  const res = await fetch("/api/rent-receipts");
+  if (!res.ok) return;
+  const data = await res.json();
+  const map: Record<string, any> = {};
+  data.asTenant?.forEach((r: any) => { map[r.settlementId] = r; });
+  data.asLandlord?.forEach((r: any) => { map[r.settlementId] = r; });
+  setReceipts(map);
+}, []);
 
   const loadHistory = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/settlement-history`);
@@ -476,7 +475,17 @@ export default function SettlePage() {
   function downloadReceipt(receiptId: string) {
     window.open(`/api/rent-receipts/${receiptId}/download`, "_blank");
   }
+async function signReceipt(receiptId: string) {
+  const ok = await confirm({
+    title: "Sign this rent receipt?",
+    message: "This confirms you as landlord and cannot be undone.",
+    confirmLabel: "Sign",
+  });
+  if (!ok) return;
 
+  await fetch(`/api/rent-receipts/${receiptId}/sign`, { method: "POST" });
+  await loadReceipts();
+}
   const activeIndex = payDialog?.index ?? null;
   const activeSuggestion = activeIndex != null ? suggestions[activeIndex] : null;
   const isPayMode = payDialog?.mode === "pay";
@@ -1311,7 +1320,7 @@ export default function SettlePage() {
 
                 {/* Rent receipt — only shown once a settlement is fully confirmed,
     and only to the payer (tenant), since they're the one requesting it */}
-                {h.status === "both_confirmed" && isPayer && h.groupType === "rent" && (
+                {h.status === "both_confirmed" && h.groupType === "rent" && (isPayer || currentUserId === h.toUserId) && (
                   <div className="pt-1">
                     {receipts[h.id] ? (
                       <div className="flex items-center gap-2 flex-wrap">
@@ -1321,19 +1330,26 @@ export default function SettlePage() {
                               : "bg-[#451a03] text-[#fb923c]"
                             }`}
                         >
-                          {receipts[h.id].status === "signed" ? "✓ Receipt signed" : "⏳ Receipt awaiting signature"}
+                          {receipts[h.id].status === "signed"
+                            ? "✓ Rent receipt signed"
+                            : isPayer
+                              ? "⏳ Waiting on landlord to sign receipt"
+                              : "⏳ Receipt awaiting your signature"}
                         </span>
                         <button onClick={() => downloadReceipt(receipts[h.id].id)} className="text-xs px-2.5 py-1.5">
                           ⬇ Download PDF
                         </button>
+                        {!isPayer && receipts[h.id].status !== "signed" && (
+                          <button
+                            onClick={() => signReceipt(receipts[h.id].id)}
+                            className="text-xs px-2.5 py-1.5 bg-[#14532d] text-[#86efac] rounded"
+                          >
+                            ✓ Sign now
+                          </button>
+                        )}
                       </div>
                     ) : (
-                      <button
-                        onClick={() => openReceiptDialog(h.id)}
-                        className="bg-transparent border border-[#1e3a5f] rounded-md text-[#93c5fd] text-xs px-2.5 py-1.5 cursor-pointer whitespace-nowrap"
-                      >
-                        🧾 Generate rent receipt
-                      </button>
+                      <span className="text-[11px] text-[#666]">🧾 Generating receipt...</span>
                     )}
                   </div>
                 )}

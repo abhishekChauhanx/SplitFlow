@@ -45,6 +45,7 @@ model Group {
   id        String        @id @default(cuid())
   name      String
   groupType String        @default("trip") // "trip" | "rent"
+  propertyAddress String?
   createdAt DateTime      @default(now())
   members   GroupMember[]
   expenses  Expense[]
@@ -121,7 +122,7 @@ model OtpCode {
 model Settlement {
   id               String    @id @default(cuid())
   groupId          String
-   group            Group      @relation(fields: [groupId], references: [id])
+  group            Group      @relation(fields: [groupId], references: [id])
   fromUserId       String
   toUserId         String
   amountPaise      Int
@@ -132,7 +133,7 @@ model Settlement {
   payeeConfirmedAt DateTime?
   disputeReason    String?
   createdAt        DateTime  @default(now())
-  rentReceipt RentReceipt?
+  rentReceipt      RentReceipt?
 }
 
 model RecurringTemplate {

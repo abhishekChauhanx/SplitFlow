@@ -17,12 +17,13 @@ export async function POST(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { name, groupType } = await req.json();
+  const { name, groupType, propertyAddress } = await req.json();
 
   const group = await prisma.group.create({
     data: {
       name,
-      groupType: groupType === "rent" ? "rent" : "trip", // default to trip if invalid/missing
+      groupType: groupType === "rent" ? "rent" : "trip",
+      propertyAddress: groupType === "rent" ? propertyAddress || null : null,
       members: { create: { userId } },
     },
   });

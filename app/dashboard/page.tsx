@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [showInfoOverlay, setShowInfoOverlay] = useState(false);
   const [newGroupType, setNewGroupType] = useState("trip");
+  const [newPropertyAddress, setNewPropertyAddress] = useState("");
   const loadGroups = useCallback(async () => {
     const res = await fetch("/api/groups");
     const data = await res.json();
@@ -48,9 +49,18 @@ export default function DashboardPage() {
     refreshAll().finally(() => setInitialLoading(false));
   }, [refreshAll]);
 
-  async function createGroup() {
+async function createGroup() {
   const trimmedName = newGroupName.trim();
   if (!trimmedName) return;
+
+  if (newGroupType === "rent" && !newPropertyAddress.trim()) {
+    await confirm({
+      title: "Property address needed",
+      message: "Please enter the property address for this rent group.",
+      mode: "alert",
+    });
+    return;
+  }
 
   const duplicate = groups.find(
     (g) => g.name.trim().toLowerCase() === trimmedName.toLowerCase()
@@ -76,12 +86,17 @@ export default function DashboardPage() {
     const res = await fetch("/api/groups", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: trimmedName, groupType: newGroupType }),
+      body: JSON.stringify({
+        name: trimmedName,
+        groupType: newGroupType,
+        propertyAddress: newPropertyAddress.trim(),
+      }),
     });
     const group = await res.json();
     setGroups([...groups, group]);
     setNewGroupName("");
     setNewGroupType("trip");
+    setNewPropertyAddress("");
   } finally {
     setCreatingGroup(false);
   }
@@ -123,16 +138,28 @@ export default function DashboardPage() {
     Test notification
   </button>
 )}
-      <div style={{ display: "flex", gap: 8, margin: "16px 0 24px" }}>
-  <input
-    placeholder="New group name"
-    value={newGroupName}
-    onChange={(e) => setNewGroupName(e.target.value)}
-  />
-  <select value={newGroupType} onChange={(e) => setNewGroupType(e.target.value)}>
-    <option value="trip">🎉 Trip / Casual</option>
-    <option value="rent">🏠 Flat / Rent</option>
-  </select>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "16px 0 24px" }}>
+  <div style={{ display: "flex", gap: 8 }}>
+    <input
+      placeholder="New group name"
+      value={newGroupName}
+      onChange={(e) => setNewGroupName(e.target.value)}
+      style={{ flex: 1 }}
+    />
+    <select value={newGroupType} onChange={(e) => setNewGroupType(e.target.value)}>
+      <option value="trip">🎉 Trip / Casual</option>
+      <option value="rent">🏠 Flat / Rent</option>
+    </select>
+  </div>
+
+  {newGroupType === "rent" && (
+    <input
+      placeholder="Property address (e.g. Flat 4B, Green Valley Apts, Pune)"
+      value={newPropertyAddress}
+      onChange={(e) => setNewPropertyAddress(e.target.value)}
+    />
+  )}
+
   <button onClick={createGroup} disabled={!newGroupName || creatingGroup}>
     {creatingGroup ? <Spinner /> : "Create"}
   </button>
