@@ -30,6 +30,7 @@ model User {
   vendorSubscriptions      VendorSubscriber[] @relation("VendorSubscriptions") // NEW
   tenantReceipts   RentReceipt[] @relation("TenantReceipts")
   landlordReceipts RentReceipt[] @relation("LandlordReceipts")
+  trustScore TrustScore?
 }
 
 model GroupInvite {
@@ -258,4 +259,18 @@ model VendorPayment {
   confirmedAt    DateTime?
   createdAt      DateTime         @default(now())
   rentReceipt    RentReceipt?
+}
+
+model TrustScore {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  user                  User     @relation(fields: [userId], references: [id])
+  score                 Int      @default(50) // 0-100, starts neutral for new users
+  label                 String   @default("New member") // "New member" | "Building trust" | "Usually reliable" | "Reliable" | "Highly reliable"
+  onTimeRate            Float    @default(0) // 0.0 - 1.0
+  disputeRate           Float    @default(0)
+  utrSubmissionRate     Float    @default(0)
+  completionRate        Float    @default(0)
+  totalSettlements      Int      @default(0) // sample size — low sample sizes get a "New member" label regardless of score
+  lastCalculatedAt      DateTime @default(now())
 }

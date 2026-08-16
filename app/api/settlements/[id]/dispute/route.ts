@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
+import { recalculateAndSaveTrustScore } from "@/lib/trust-score";
 
 export async function POST(
   req: NextRequest,
@@ -51,5 +52,11 @@ export async function POST(
   }
 
   const updated = await prisma.settlement.update({ where: { id }, data: updateData });
+
+  // Recalculate the payer's trust score — a fresh dispute lowers their
+  // dispute-free rate; a "reopen" or "forgive" resolution changes their
+  // completion rate too. Never blocks the response if scoring fails.
+  await recalculateAndSaveTrustScore(updated.fromUserId).catch(() => {});
+
   return NextResponse.json(updated);
 }
