@@ -21,7 +21,6 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  // Check if account was deleted — block even valid sessions
   if (isValidSession && userId && !pathname.startsWith("/account-deleted")) {
     try {
       const user = await prisma.user.findUnique({
@@ -32,11 +31,10 @@ export async function proxy(req: NextRequest) {
         return NextResponse.redirect(new URL("/account-deleted", req.url));
       }
     } catch {
-      // If DB check fails, don't block — fail open
+      // fail open
     }
   }
 
-  // Already logged in → skip login page
   if (pathname === "/login" && isValidSession) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
@@ -44,8 +42,8 @@ export async function proxy(req: NextRequest) {
   const isPublic =
     pathname === "/login" ||
     pathname === "/account-deleted" ||
-    pathname.startsWith("/join/") ||
-    pathname.startsWith("/pay/");
+    pathname.startsWith("/join/");
+    // NOTE: "/pay/" removed — payment pages now require login like everything else
 
   if (!isPublic && !isValidSession) {
     const loginUrl = new URL("/login", req.url);

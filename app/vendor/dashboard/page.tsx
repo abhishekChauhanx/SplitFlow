@@ -113,7 +113,8 @@ export default function VendorDashboardPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [decidingPaymentId, setDecidingPaymentId] = useState<string | null>(null);
   const [viewingCollectionId, setViewingCollectionId] = useState<string | null>(null);
-
+const [receiptsToSign, setReceiptsToSign] = useState<any[]>([]);
+const [signingId, setSigningId] = useState<string | null>(null);
   const load = useCallback(async () => {
     const res = await fetch("/api/vendor/register", { cache: "no-store" });
     const data = await res.json();
@@ -123,6 +124,13 @@ export default function VendorDashboardPage() {
     }
     setVendor(data);
   }, [router]);
+
+  const loadReceipts = useCallback(async () => {
+  const res = await fetch("/api/rent-receipts");
+  if (!res.ok) return;
+  const data = await res.json();
+  setReceiptsToSign((data.asLandlord || []).filter((r: any) => r.status !== "signed"));
+}, []);
 
   const silentReload = useCallback(async () => {
     try {
@@ -142,7 +150,7 @@ export default function VendorDashboardPage() {
   // whether or not anything could plausibly have changed.
   useEffect(() => {
     load().finally(() => setInitialLoading(false));
-
+loadReceipts();
     function handleFocusOrVisible() {
       if (document.visibilityState === "visible") {
         silentReload();
@@ -157,6 +165,26 @@ export default function VendorDashboardPage() {
     };
   }, [load, silentReload]);
 
+  async function signReceipt(receiptId: string) {
+  const ok = await confirm({
+    title: "Sign this rent receipt?",
+    message: "This confirms you as the landlord and cannot be undone.",
+    confirmLabel: "Sign",
+  });
+  if (!ok) return;
+
+  setSigningId(receiptId);
+  try {
+    await fetch(`/api/rent-receipts/${receiptId}/sign`, { method: "POST" });
+    await loadReceipts();
+  } finally {
+    setSigningId(null);
+  }
+}
+
+function downloadReceipt(receiptId: string) {
+  window.open(`/api/rent-receipts/${receiptId}/download`, "_blank");
+}
   function goToNewCollection() {
     setNavLabel("Loading new collection");
     router.push("/vendor/collection/new");
@@ -346,7 +374,55 @@ export default function VendorDashboardPage() {
           </div>
         ))}
       </div>
-
+{receiptsToSign.length > 0 && (
+  <div style={{ marginBottom: 24 }}>
+    <h2 style={{ fontSize: 15, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+      🧾 Rent receipts to sign ({receiptsToSign.length})
+    </h2>
+    {receiptsToSign.map((r: any) => (
+      <div
+        key={r.id}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "12px 16px",
+          background: "#1a1a1a",
+          border: "1px solid #451a03",
+          borderRadius: 8,
+          marginBottom: 8,
+        }}
+      >
+        <div>
+          <p style={{ margin: "0 0 2px", fontSize: 14 }}>
+            ₹{(r.amountPaise / 100).toFixed(2)} from {r.tenant?.name || "Tenant"}
+          </p>
+          <p style={{ margin: 0, fontSize: 12, color: "#888" }}>{r.propertyAddress}</p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => downloadReceipt(r.id)} style={{ fontSize: 12, padding: "4px 10px" }}>
+            Preview
+          </button>
+          <button
+            onClick={() => signReceipt(r.id)}
+            disabled={signingId === r.id}
+            style={{
+              fontSize: 12,
+              background: "#14532d",
+              color: "#86efac",
+              border: "none",
+              borderRadius: 4,
+              padding: "4px 10px",
+              cursor: "pointer",
+            }}
+          >
+            {signingId === r.id ? <Spinner /> : "✓ Sign"}
+          </button>
+        </div>
+      </div>
+    ))}
+  </div>
+)}
       {/* Collections table */}
       <h2 style={{ fontSize: 15, color: "#888", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
         Collections

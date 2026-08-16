@@ -12,7 +12,7 @@ model User {
   name                     String?
   phone                    String?
   upiId                    String?
-  role                     String             @default("member") // "member" | "vendor"
+  role                     String             @default("member")
   isPlaceholder            Boolean            @default(false)
   isDeleted                Boolean            @default(false)
   deletedAt                DateTime?
@@ -20,13 +20,16 @@ model User {
   updatedAt                DateTime           @updatedAt
   groups                   GroupMember[]
   expensesPaid             Expense[]          @relation("PaidBy")
-  createdExpenses          Expense[]          @relation("CreatedExpenses") // NEW - fixes createdBy error
+  createdExpenses          Expense[]          @relation("CreatedExpenses")
   splits                   ExpenseSplit[]
   editPermissionsRequested EditPermission[]   @relation("RequestedPermissions")
   editPermissionsOwned     EditPermission[]   @relation("OwnedPermissions")
-  pushSubscriptions        PushSubscription[] // already had opposite issue - see below
-  expensePayments          ExpensePayment[]   @relation("ExpensePayments") // NEW - fixes user error
+  pushSubscriptions        PushSubscription[]
+  expensePayments          ExpensePayment[]   @relation("ExpensePayments")
   vendorProfile            Vendor?
+  vendorSubscriptions      VendorSubscriber[] @relation("VendorSubscriptions") // NEW
+  tenantReceipts   RentReceipt[] @relation("TenantReceipts")
+  landlordReceipts RentReceipt[] @relation("LandlordReceipts")
 }
 
 model GroupInvite {
@@ -201,7 +204,8 @@ model VendorCollection {
   dueDate         DateTime?
   cycleMonth      String?
   token           String                    @unique @default(cuid())
-  openEnrollment  Boolean                   @default(false) // if true, anyone with the link can join as a new subscriber; if false (default), only pre-added subscribers can pay
+  openEnrollment  Boolean                   @default(false)
+  propertyAddress String?                   // NEW — only meaningful when vendor.businessType = "landlord"
   createdAt       DateTime                  @default(now())
   subscribers     VendorSubscriber[]
   payments        VendorPayment[]
@@ -211,14 +215,33 @@ model VendorSubscriber {
   id            String           @id @default(cuid())
   collection    VendorCollection @relation(fields: [collectionId], references: [id])
   collectionId  String
-  userId        String?
+  userId        String? // nullable now — null until the invited person logs in and claims it
+  user          User?            @relation("VendorSubscriptions", fields: [userId], references: [id])
   name          String
-  email         String?
-  phone         String?
+  invitedEmail  String? // set when the vendor pre-adds someone by email, before they've claimed it
   createdAt     DateTime         @default(now())
   payment       VendorPayment?
 
-  @@unique([collectionId, email])
+  @@unique([collectionId, userId])
+}
+
+model RentReceipt {
+  id                String    @id @default(cuid())
+  vendorPaymentId   String    @unique
+  vendorPayment     VendorPayment @relation(fields: [vendorPaymentId], references: [id])
+  tenantId          String
+  tenant            User      @relation("TenantReceipts", fields: [tenantId], references: [id])
+  landlordId        String
+  landlord          User      @relation("LandlordReceipts", fields: [landlordId], references: [id])
+  landlordPan       String?
+  propertyAddress   String
+  amountPaise       Int
+  paymentPeriodFrom DateTime
+  paymentPeriodTo   DateTime
+  utrNumber         String?
+  status            String    @default("pending_signature")
+  signedAt          DateTime?
+  createdAt         DateTime  @default(now())
 }
 
 model VendorPayment {
@@ -228,10 +251,11 @@ model VendorPayment {
   subscriber     VendorSubscriber @relation(fields: [subscriberId], references: [id])
   subscriberId   String           @unique
   amountPaise    Int
-  paymentMethod  String           @default("upi") // "upi" | "cash"
+  paymentMethod  String           @default("upi")
   utrNumber      String?
-  status         String           @default("pending") // "pending" | "paid" | "confirmed"
+  status         String           @default("pending")
   paidAt         DateTime?
   confirmedAt    DateTime?
   createdAt      DateTime         @default(now())
+  rentReceipt    RentReceipt?
 }

@@ -6,7 +6,7 @@ import BackButton from "@/components/BackButton";
 import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 import { useModal } from "@/components/ModalProvider";
 
-type SubscriberFormValue = { name: string; email: string; phone: string };
+type SubscriberFormValue = { name: string; email: string };
 
 export default function NewCollectionPage() {
   const router = useRouter();
@@ -18,12 +18,17 @@ export default function NewCollectionPage() {
   const [dueDate, setDueDate] = useState("");
   const [subscribers, setSubscribers] = useState<SubscriberFormValue[]>([]);
   const [creating, setCreating] = useState(false);
-
+const [businessType, setBusinessType] = useState<string | null>(null);
+const [propertyAddress, setPropertyAddress] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setInitialLoading(false), 350);
     return () => clearTimeout(t);
   }, []);
-
+useEffect(() => {
+  fetch("/api/vendor/register")
+    .then((r) => r.json())
+    .then((v) => setBusinessType(v?.businessType || null));
+}, []);
   async function openSubscriberForm(editingIndex: number | null) {
     const existing = editingIndex !== null ? subscribers[editingIndex] : null;
 
@@ -31,10 +36,9 @@ export default function NewCollectionPage() {
       title: editingIndex !== null ? "Edit subscriber" : "Add subscriber",
       fields: [
         { key: "name", label: "Name", placeholder: "e.g. Rahul Sharma", required: true },
-        { key: "email", label: "Email", placeholder: "e.g. rahul@example.com", type: "email" },
-        { key: "phone", label: "Phone", placeholder: "e.g. 98765 43210", type: "tel" },
+        { key: "email", label: "Email", placeholder: "e.g. rahul@example.com", type: "email", required: true },
       ],
-      defaultValues: existing ? { name: existing.name, email: existing.email, phone: existing.phone } : undefined,
+      defaultValues: existing ? { name: existing.name, email: existing.email } : undefined,
       confirmLabel: editingIndex !== null ? "Save" : "Add",
     });
 
@@ -54,7 +58,7 @@ export default function NewCollectionPage() {
       return;
     }
 
-    const value: SubscriberFormValue = { name: result.name, email: result.email, phone: result.phone };
+    const value: SubscriberFormValue = { name: result.name, email: result.email };
 
     if (editingIndex !== null) {
       setSubscribers(subscribers.map((s, i) => (i === editingIndex ? value : s)));
@@ -63,22 +67,39 @@ export default function NewCollectionPage() {
     }
   }
 
-  function removeSubscriber(i: number) {
+  async function removeSubscriber(i: number) {
+    const target = subscribers[i];
+    const ok = await confirm({
+      title: "Remove subscriber?",
+      message: `Remove "${target.name}" (${target.email}) from this collection?`,
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
     setSubscribers(subscribers.filter((_, idx) => idx !== i));
   }
 
   async function create() {
+    if (subscribers.length === 0) {
+      await confirm({
+        title: "No subscribers added",
+        message: "Add at least one subscriber before creating this collection.",
+        mode: "alert",
+      });
+      return;
+    }
+
     setCreating(true);
     try {
       const res = await fetch("/api/vendor/collections", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          amountPaise: Math.round(parseFloat(amount) * 100),
-          dueDate: dueDate || null,
-          subscribers,
-        }),
+  title,
+  amountPaise: Math.round(parseFloat(amount) * 100),
+  dueDate: dueDate || null,
+  propertyAddress: businessType === "landlord" ? propertyAddress.trim() || null : null,
+  subscribers,
+}),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -135,6 +156,19 @@ export default function NewCollectionPage() {
         <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
           Due date (optional)
         </label>
+        {businessType === "landlord" && (
+  <div style={{ marginBottom: 20 }}>
+    <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
+      Property address (required for HRA receipts)
+    </label>
+    <input
+      placeholder="e.g. Flat 4B, Green Valley Apts, Pune"
+      value={propertyAddress}
+      onChange={(e) => setPropertyAddress(e.target.value)}
+      style={{ width: "100%" }}
+    />
+  </div>
+)}
         <input
           type="date"
           value={dueDate}
@@ -153,6 +187,10 @@ export default function NewCollectionPage() {
         </button>
       </div>
 
+      <p style={{ fontSize: 12, color: "#666", margin: "0 0 12px" }}>
+        They'll link to their SplitFlow account automatically the first time they log in and open the collection link with this email.
+      </p>
+
       {subscribers.length === 0 && (
         <div style={{ padding: 16, background: "#1a1a1a", borderRadius: 8, textAlign: "center", marginBottom: 20 }}>
           <p style={{ color: "#888", margin: 0, fontSize: 13 }}>No subscribers added yet.</p>
@@ -163,22 +201,30 @@ export default function NewCollectionPage() {
         <div
           key={i}
           style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            padding: "10px 12px", background: "#141414", border: "1px solid #2a2a2a",
-            borderRadius: 8, marginBottom: 8,
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "10px 12px",
+            background: "#1a1a1a",
+            borderRadius: 8,
+            marginBottom: 8,
           }}
         >
           <div>
-            <p style={{ margin: 0, fontSize: 14 }}>{s.name}</p>
-            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>
-              {[s.email, s.phone].filter(Boolean).join(" · ") || "No contact info"}
-            </p>
+            <p style={{ margin: 0, fontSize: 14, color: "#eee" }}>{s.name}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>{s.email}</p>
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => openSubscriberForm(i)} style={{ fontSize: 12, color: "#60a5fa", background: "none", border: "none", cursor: "pointer" }}>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={() => openSubscriberForm(i)}
+              style={{ fontSize: 12, background: "transparent", border: "1px solid #333", borderRadius: 4, color: "#ccc", padding: "4px 10px", cursor: "pointer" }}
+            >
               Edit
             </button>
-            <button onClick={() => removeSubscriber(i)} style={{ fontSize: 12, color: "#f87171", background: "none", border: "none", cursor: "pointer" }}>
+            <button
+              onClick={() => removeSubscriber(i)}
+              style={{ fontSize: 12, background: "transparent", border: "1px solid #7f1d1d", borderRadius: 4, color: "#f87171", padding: "4px 10px", cursor: "pointer" }}
+            >
               Remove
             </button>
           </div>

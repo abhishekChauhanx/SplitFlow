@@ -1,42 +1,47 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
 
 export default function PayPage() {
   const { token } = useParams();
+  const router = useRouter();
   const [collection, setCollection] = useState<any>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
-  const [name, setName] = useState("");
   const [utrNumber, setUtrNumber] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
-const [email, setEmail] = useState("");
-const [alreadyPaidName, setAlreadyPaidName] = useState<string | null>(null);
 
-// on blur of the email field, re-check:
-async function checkEmail() {
-  if (!email.trim()) { setAlreadyPaidName(null); return; }
-  const res = await fetch(`/api/vendor/pay/${token}?email=${encodeURIComponent(email.trim())}`);
-  const data = await res.json();
-  if (data.emailStatus?.alreadyPaid) {
-    setAlreadyPaidName(data.emailStatus.subscriberName);
-  } else {
-    setAlreadyPaidName(null);
-  }
-}
   useEffect(() => {
     fetch(`/api/vendor/pay/${token}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (r.status === 401) {
+          router.push(`/login?from=/pay/${token}`);
+          return null;
+        }
+        return r.json();
+      })
       .then(async (data) => {
-        if (data.error) { setError(data.error); setLoading(false); return; }
+        if (!data) return; // redirected to login above
+
+        if (data.error) {
+          setError(data.error);
+          setLoading(false);
+          return;
+        }
+
         setCollection(data);
 
-        // Generate UPI QR
+        if (data.myPaymentStatus) {
+          setDone(true);
+          setLoading(false);
+          return;
+        }
+
         if (data.vendorUpiId) {
           const amountRupees = (data.amountPaise / 100).toFixed(2);
           const upiUrl = `upi://pay?pa=${data.vendorUpiId}&pn=${encodeURIComponent(data.vendorName)}&am=${amountRupees}&cu=INR&tn=${encodeURIComponent(data.title)}`;
@@ -44,47 +49,49 @@ async function checkEmail() {
           setQrCode(qr);
         }
         setLoading(false);
+      })
+      .catch(() => {
+        setError("Couldn't load this payment link. Please try again.");
+        setLoading(false);
       });
   }, [token]);
 
-async function recordPayment() {
-  if (!name.trim()) { setError("Please enter your name"); return; }
-  if (!email.trim()) { setError("Please enter your email"); return; }
+  async function recordPayment() {
+    setSubmitting(true);
+    setError("");
 
-  setSubmitting(true);
-  setError("");
-
-  try {
-    const res = await fetch(`/api/vendor/pay/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, utrNumber, paymentMethod }),
-    });
-
-    // Guard against a non-JSON response (e.g. a 500 HTML error page from a
-    // server-side crash) — without this, res.json() throws and the button
-    // gets stuck on "Recording..." forever since nothing resets submitting.
-    let data: any = null;
     try {
-      data = await res.json();
+      const res = await fetch(`/api/vendor/pay/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ utrNumber, paymentMethod }),
+      });
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        setError("Something went wrong on our end — please try again.");
+        return;
+      }
+
+      if (res.status === 401) {
+        router.push(`/login?from=/pay/${token}`);
+        return;
+      }
+
+      if (!res.ok) {
+        setError(data?.error || "Failed to record payment");
+        return;
+      }
+
+      setDone(true);
     } catch {
-      setError("Something went wrong on our end — please try again.");
-      return;
+      setError("Couldn't reach the server — check your connection and try again.");
+    } finally {
+      setSubmitting(false);
     }
-
-    if (!res.ok) {
-      setError(data?.error || "Failed to record payment");
-      return;
-    }
-
-    setDone(true);
-  } catch (err) {
-    // Network failure, request aborted, etc.
-    setError("Couldn't reach the server — check your connection and try again.");
-  } finally {
-    setSubmitting(false);
   }
-}
 
   if (loading) return <p style={{ textAlign: "center", marginTop: 80 }}>Loading...</p>;
 
@@ -102,16 +109,17 @@ async function recordPayment() {
         <p style={{ fontSize: 48 }}>✅</p>
         <h2>Payment recorded!</h2>
         <p style={{ color: "#888" }}>
-          {collection.vendorName} will confirm receipt once they verify the payment.
+          {collection?.vendorName} will confirm receipt once they verify the payment.
         </p>
+        <a href="/tenant/dashboard" style={{ color: "#60a5fa", fontSize: 13 }}>
+          Go to my payments dashboard →
+        </a>
       </div>
     );
   }
 
   return (
     <div style={{ maxWidth: 400, margin: "40px auto", padding: "0 16px" }}>
-
-      {/* Header */}
       <div style={{ textAlign: "center", marginBottom: 24 }}>
         <h1 style={{ margin: "0 0 4px" }}>{collection.title}</h1>
         <p style={{ margin: 0, color: "#888", fontSize: 14 }}>
@@ -127,7 +135,6 @@ async function recordPayment() {
         )}
       </div>
 
-      {/* Progress */}
       <div style={{ background: "#1a1a1a", borderRadius: 8, padding: 12, marginBottom: 20, textAlign: "center" }}>
         <p style={{ margin: 0, fontSize: 13, color: "#888" }}>
           {collection.paidCount} of {collection.subscriberCount} subscribers have paid
@@ -144,7 +151,6 @@ async function recordPayment() {
         </div>
       </div>
 
-      {/* QR + UPI link */}
       {qrCode && (
         <div style={{ textAlign: "center", marginBottom: 20 }}>
           <img src={qrCode} alt="UPI QR" width={180} height={180} />
@@ -160,37 +166,8 @@ async function recordPayment() {
         </div>
       )}
 
-      {/* Record payment form */}
       <div style={{ background: "#1a1a1a", borderRadius: 8, padding: 16 }}>
         <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Record your payment</h3>
-
-<div style={{ marginBottom: 10 }}>
-  <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>Your email *</label>
-  <input
-    type="email"
-    placeholder="you@example.com"
-    value={email}
-    onChange={(e) => setEmail(e.target.value)}
-    onBlur={checkEmail}
-    style={{ width: "100%" }}
-  />
-  {alreadyPaidName && (
-    <p style={{ color: "#86efac", fontSize: 12, marginTop: 4 }}>
-      ✓ This email already has a payment recorded ({alreadyPaidName}).
-    </p>
-  )}
-</div>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
-            Your name *
-          </label>
-          <input
-            placeholder="e.g. Rahul Sharma"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{ width: "100%" }}
-          />
-        </div>
 
         <div style={{ marginBottom: 10 }}>
           <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
@@ -225,7 +202,7 @@ async function recordPayment() {
 
         <button
           onClick={recordPayment}
-          disabled={submitting || !name}
+          disabled={submitting}
           style={{
             background: "#2563eb",
             color: "#fff",
