@@ -18,12 +18,17 @@ export default function NewCollectionPage() {
   const [dueDate, setDueDate] = useState("");
   const [subscribers, setSubscribers] = useState<SubscriberFormValue[]>([]);
   const [creating, setCreating] = useState(false);
-
+const [businessType, setBusinessType] = useState<string | null>(null);
+const [propertyAddress, setPropertyAddress] = useState("");
   useEffect(() => {
     const t = setTimeout(() => setInitialLoading(false), 350);
     return () => clearTimeout(t);
   }, []);
-
+useEffect(() => {
+  fetch("/api/vendor/register")
+    .then((r) => r.json())
+    .then((v) => setBusinessType(v?.businessType || null));
+}, []);
   async function openSubscriberForm(editingIndex: number | null) {
     const existing = editingIndex !== null ? subscribers[editingIndex] : null;
 
@@ -89,11 +94,12 @@ export default function NewCollectionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          amountPaise: Math.round(parseFloat(amount) * 100),
-          dueDate: dueDate || null,
-          subscribers, // now always [{ name, email }] — matches the API's expected shape
-        }),
+  title,
+  amountPaise: Math.round(parseFloat(amount) * 100),
+  dueDate: dueDate || null,
+  propertyAddress: businessType === "landlord" ? propertyAddress.trim() || null : null,
+  subscribers,
+}),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -150,6 +156,19 @@ export default function NewCollectionPage() {
         <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
           Due date (optional)
         </label>
+        {businessType === "landlord" && (
+  <div style={{ marginBottom: 20 }}>
+    <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
+      Property address (required for HRA receipts)
+    </label>
+    <input
+      placeholder="e.g. Flat 4B, Green Valley Apts, Pune"
+      value={propertyAddress}
+      onChange={(e) => setPropertyAddress(e.target.value)}
+      style={{ width: "100%" }}
+    />
+  </div>
+)}
         <input
           type="date"
           value={dueDate}

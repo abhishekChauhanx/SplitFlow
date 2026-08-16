@@ -28,6 +28,8 @@ model User {
   expensePayments          ExpensePayment[]   @relation("ExpensePayments")
   vendorProfile            Vendor?
   vendorSubscriptions      VendorSubscriber[] @relation("VendorSubscriptions") // NEW
+  tenantReceipts   RentReceipt[] @relation("TenantReceipts")
+  landlordReceipts RentReceipt[] @relation("LandlordReceipts")
 }
 
 model GroupInvite {
@@ -202,7 +204,8 @@ model VendorCollection {
   dueDate         DateTime?
   cycleMonth      String?
   token           String                    @unique @default(cuid())
-  openEnrollment  Boolean                   @default(false) // if true, anyone with the link can join as a new subscriber; if false (default), only pre-added subscribers can pay
+  openEnrollment  Boolean                   @default(false)
+  propertyAddress String?                   // NEW — only meaningful when vendor.businessType = "landlord"
   createdAt       DateTime                  @default(now())
   subscribers     VendorSubscriber[]
   payments        VendorPayment[]
@@ -222,6 +225,25 @@ model VendorSubscriber {
   @@unique([collectionId, userId])
 }
 
+model RentReceipt {
+  id                String    @id @default(cuid())
+  vendorPaymentId   String    @unique
+  vendorPayment     VendorPayment @relation(fields: [vendorPaymentId], references: [id])
+  tenantId          String
+  tenant            User      @relation("TenantReceipts", fields: [tenantId], references: [id])
+  landlordId        String
+  landlord          User      @relation("LandlordReceipts", fields: [landlordId], references: [id])
+  landlordPan       String?
+  propertyAddress   String
+  amountPaise       Int
+  paymentPeriodFrom DateTime
+  paymentPeriodTo   DateTime
+  utrNumber         String?
+  status            String    @default("pending_signature")
+  signedAt          DateTime?
+  createdAt         DateTime  @default(now())
+}
+
 model VendorPayment {
   id             String           @id @default(cuid())
   collection     VendorCollection @relation(fields: [collectionId], references: [id])
@@ -229,10 +251,11 @@ model VendorPayment {
   subscriber     VendorSubscriber @relation(fields: [subscriberId], references: [id])
   subscriberId   String           @unique
   amountPaise    Int
-  paymentMethod  String           @default("upi") // "upi" | "cash"
+  paymentMethod  String           @default("upi")
   utrNumber      String?
-  status         String           @default("pending") // "pending" | "paid" | "confirmed"
+  status         String           @default("pending")
   paidAt         DateTime?
   confirmedAt    DateTime?
   createdAt      DateTime         @default(now())
+  rentReceipt    RentReceipt?
 }

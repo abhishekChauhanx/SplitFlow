@@ -33,7 +33,8 @@ export default function EditCollectionPage() {
   const [existing, setExisting] = useState<ExistingSubscriber[]>([]);
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [added, setAdded] = useState<NewSubscriber[]>([]);
-
+const [businessType, setBusinessType] = useState<string | null>(null);
+const [propertyAddress, setPropertyAddress] = useState("");
   async function load() {
     const res = await fetch(`/api/vendor/collections/${collectionId}`);
     const data = await res.json();
@@ -54,6 +55,7 @@ export default function EditCollectionPage() {
         hasPaid: !!s.payment,
       }))
     );
+    setPropertyAddress(data.propertyAddress || "");
     setRemovedIds([]);
     setAdded([]);
   }
@@ -61,6 +63,11 @@ export default function EditCollectionPage() {
   useEffect(() => {
     load().finally(() => setInitialLoading(false));
   }, [collectionId]);
+  useEffect(() => {
+  fetch("/api/vendor/register")
+    .then((r) => r.json())
+    .then((v) => setBusinessType(v?.businessType || null));
+}, []);
 
   function updateExisting(id: string, field: string, value: string) {
     setExisting(existing.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
@@ -162,15 +169,14 @@ export default function EditCollectionPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          amountPaise: Math.round(parseFloat(amount) * 100),
-          dueDate: dueDate || null,
-          updateSubscribers: existing
-            .filter((s) => !removedIds.includes(s.id))
-            .map((s) => ({ id: s.id, name: s.name, email: s.email || null, phone: s.phone || null })),
-          removeSubscriberIds: removedIds,
-          addSubscribers: added.filter((s) => s.name.trim()),
-        }),
+  title,
+  amountPaise: Math.round(parseFloat(amount) * 100),
+  dueDate: dueDate || null,
+  propertyAddress: businessType === "landlord" ? propertyAddress.trim() || null : null,
+  updateSubscribers: existing.filter((s) => !removedIds.includes(s.id)).map((s) => ({ id: s.id, name: s.name, email: s.email || null, phone: s.phone || null })),
+  removeSubscriberIds: removedIds,
+  addSubscribers: added.filter((s) => s.name.trim()),
+}),
       });
       const data = await res.json();
       if (!res.ok) {

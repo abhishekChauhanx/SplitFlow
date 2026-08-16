@@ -9,8 +9,12 @@ export async function GET() {
   const subscriptions = await prisma.vendorSubscriber.findMany({
     where: { userId },
     include: {
-      collection: { include: { vendor: { select: { businessName: true } } } },
-      payment: true,
+      collection: {
+        include: { vendor: { select: { businessName: true, businessType: true } } },
+      },
+      payment: {
+        include: { rentReceipt: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
