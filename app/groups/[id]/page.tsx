@@ -359,7 +359,7 @@ export default function GroupDetailPage() {
     if (members.length === 0) return;
     Promise.all(
       members.map((m: any) =>
-        fetch(`/api/users/${m.userId}/trust-score`).then((r) => r.json()).then((data) => [m.userId, data])
+        fetch(`/api/user/${m.userId}/trust-score`).then((r) => r.json()).then((data) => [m.userId, data])
       )
     ).then((results) => {
       setMemberScores(Object.fromEntries(results));
