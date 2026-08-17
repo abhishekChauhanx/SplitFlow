@@ -228,6 +228,7 @@ export default function GroupDetailPage() {
   const [myPermissions, setMyPermissions] = useState<Record<string, string>>({}); // expenseId -> status
   const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, string>>({}); // expenseId -> permissionId
 
+  const [memberScores, setMemberScores] = useState<Record<string, any>>({});
   // Same-tick safety net against double-firing within one poll. The real guard
   // against repeat notifications on remount/navigation is server-side (the
   // `notified` flag on EditPermission, and deleting denied rows once shown) —
@@ -320,40 +321,58 @@ export default function GroupDetailPage() {
       });
   }, [confirm, id]);
 
- useEffect(() => {
-  fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-  Promise.all([
-    loadExpenses(),
-    loadGroup(),
-    loadSummary(),
-    loadPendingRequests(),
-    loadMyPermissions(),
-    loadRecurringTemplates(),
-  ]).finally(() => setInitialLoading(false));
+  useEffect(() => {
+    fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
+    Promise.all([
+      loadExpenses(),
+      loadGroup(),
+      loadSummary(),
+      loadPendingRequests(),
+      loadMyPermissions(),
+      loadRecurringTemplates(),
+    ]).finally(() => setInitialLoading(false));
 
-  const interval = setInterval(() => {
-    if (document.visibilityState === "visible") {
-      loadPendingRequests();
-      loadMyPermissions();
-    }
-  }, 8000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadPendingRequests();
+        loadMyPermissions();
+      }
+    }, 8000);
 
-  function handleFocusOrVisible() {
-    if (document.visibilityState === "visible") {
-      loadSummary();
-      loadExpenses();
-      loadRecurringTemplates();
+    function handleFocusOrVisible() {
+      if (document.visibilityState === "visible") {
+        loadSummary();
+        loadExpenses();
+        loadRecurringTemplates();
+      }
     }
+    window.addEventListener("focus", handleFocusOrVisible);
+    document.addEventListener("visibilitychange", handleFocusOrVisible);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handleFocusOrVisible);
+      document.removeEventListener("visibilitychange", handleFocusOrVisible);
+    };
+  }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
+  useEffect(() => {
+    if (members.length === 0) return;
+    Promise.all(
+      members.map((m: any) =>
+        fetch(`/api/user/${m.userId}/trust-score`).then((r) => r.json()).then((data) => [m.userId, data])
+      )
+    ).then((results) => {
+      setMemberScores(Object.fromEntries(results));
+    });
+  }, [members]);
+
+  function scoreBadgeColor(score: number) {
+    if (score >= 90) return { bg: "#14532d", text: "#86efac" };
+    if (score >= 75) return { bg: "#1a2e05", text: "#a3e635" };
+    if (score >= 55) return { bg: "#451a03", text: "#fbbf24" };
+    return { bg: "#1c1917", text: "#fb923c" };
   }
-  window.addEventListener("focus", handleFocusOrVisible);
-  document.addEventListener("visibilitychange", handleFocusOrVisible);
 
-  return () => {
-    clearInterval(interval);
-    window.removeEventListener("focus", handleFocusOrVisible);
-    document.removeEventListener("visibilitychange", handleFocusOrVisible);
-  };
-}, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
   const refreshAll = useCallback(async () => {
     await Promise.all([
       loadExpenses(),
@@ -578,10 +597,10 @@ export default function GroupDetailPage() {
 
       const shareUnits = expenseSplitType === "SHARES"
         ? Object.fromEntries(
-            Object.entries(shareInputs)
-              .filter(([, v]) => v)
-              .map(([uid, v]) => [uid, parseInt(v)])
-          )
+          Object.entries(shareInputs)
+            .filter(([, v]) => v)
+            .map(([uid, v]) => [uid, parseInt(v)])
+        )
         : undefined;
 
       const res = await fetch(`/api/groups/${id}/expenses`, {
@@ -636,7 +655,7 @@ export default function GroupDetailPage() {
       setShareInputs({});
       setExpenseSplitType("EQUAL");
       setShowExpenseModal(false);
-      
+
       loadSummary();
     } finally {
       setAddingExpense(false);
@@ -708,20 +727,20 @@ export default function GroupDetailPage() {
   const loaderLabel = initialLoading
     ? "Loading group"
     : addingMember
-    ? "Adding member"
-    : generatingInvite
-    ? "Generating invite link"
-    : addingPlaceholder
-    ? "Adding placeholder"
-    : addingExpense
-    ? addingExpenseLabel
-    : savingEdit
-    ? "Saving changes"
-    : deletingExpenseId !== null
-    ? "Deleting expense"
-    : requestingPermissionId !== null
-    ? "Sending request"
-    : "";
+      ? "Adding member"
+      : generatingInvite
+        ? "Generating invite link"
+        : addingPlaceholder
+          ? "Adding placeholder"
+          : addingExpense
+            ? addingExpenseLabel
+            : savingEdit
+              ? "Saving changes"
+              : deletingExpenseId !== null
+                ? "Deleting expense"
+                : requestingPermissionId !== null
+                  ? "Sending request"
+                  : "";
 
   return (
     <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
@@ -773,15 +792,41 @@ export default function GroupDetailPage() {
 
       <h2>Members</h2>
       <ul>
-        {members.map((m) => (
-          <li key={m.userId}>
-            {m.user.name || m.user.email}
-            {m.userId === currentUserId && (
-              <span style={{ color: "#888", fontSize: 12, marginLeft: 6 }}>(me)</span>
-            )}
-          </li>
-        ))}
-      </ul>
+  {members.map((m) => {
+    const ts = memberScores[m.userId];
+    const badge = ts ? scoreBadgeColor(ts.score) : null;
+    return (
+      <li key={m.userId} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        <span>
+          {m.user.name || m.user.email}
+          {m.userId === currentUserId && (
+            <span style={{ color: "#888", fontSize: 12, marginLeft: 6 }}>(me)</span>
+          )}
+        </span>
+        {ts && ts.totalSettlements > 0 && (
+          <span
+            title={`${ts.label} — based on ${ts.totalSettlements} settlements`}
+            style={{
+              fontSize: 10,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background: badge!.bg,
+              color: badge!.text,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {ts.score} · {ts.label}
+          </span>
+        )}
+        {ts && ts.totalSettlements === 0 && (
+          <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#1c1917", color: "#888" }}>
+            New member
+          </span>
+        )}
+      </li>
+    );
+  })}
+</ul>
 
       {/* a) Add member — opens dialog */}
       <button onClick={() => setShowAddMemberModal(true)}>Add member</button>

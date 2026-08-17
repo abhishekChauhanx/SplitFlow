@@ -18,7 +18,7 @@ export default function AccountPage() {
   const [exporting, setExporting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState("");
-
+  const [trustScore, setTrustScore] = useState<any>(null);
   function loadProfile() {
     fetch("/api/user/profile")
       .then((r) => r.json())
@@ -32,7 +32,15 @@ export default function AccountPage() {
   }
 
   useEffect(() => { loadProfile(); }, []);
-
+  useEffect(() => {
+    fetch("/api/user/trust-score").then((r) => r.json()).then(setTrustScore);
+  }, []);
+  function scoreColor(score: number) {
+    if (score >= 90) return "#86efac";
+    if (score >= 75) return "#a3e635";
+    if (score >= 55) return "#fbbf24";
+    return "#fb923c";
+  }
   async function saveProfile() {
     setSaving(true);
     setSaveSuccess(false);
@@ -182,7 +190,47 @@ export default function AccountPage() {
           </div>
         )}
       </div>
+{trustScore && (
+  <div style={{ padding: 16, background: "#1a1a1a", borderRadius: 8, marginBottom: 24 }}>
+    <h2 style={{ margin: "0 0 4px", fontSize: 16 }}>Trust score</h2>
+    <p style={{ margin: "0 0 16px", fontSize: 12, color: "#666" }}>
+      Calculated from your settlement history — how reliably you confirm and pay what you owe.
+    </p>
 
+    <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
+      <div style={{
+        width: 64, height: 64, borderRadius: "50%",
+        border: `4px solid ${scoreColor(trustScore.score)}`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 20, fontWeight: 700, color: scoreColor(trustScore.score),
+      }}>
+        {trustScore.score}
+      </div>
+      <div>
+        <p style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{trustScore.label}</p>
+        <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>
+          Based on {trustScore.totalSettlements} settlement{trustScore.totalSettlements === 1 ? "" : "s"}
+        </p>
+      </div>
+    </div>
+
+    {trustScore.totalSettlements > 0 && (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {[
+          { label: "On-time confirmations", value: `${Math.round(trustScore.onTimeRate * 100)}%` },
+          { label: "Dispute-free rate", value: `${Math.round((1 - trustScore.disputeRate) * 100)}%` },
+          { label: "UTR proof provided", value: `${Math.round(trustScore.utrSubmissionRate * 100)}%` },
+          { label: "Settlements completed", value: `${Math.round(trustScore.completionRate * 100)}%` },
+        ].map((stat) => (
+          <div key={stat.label} style={{ padding: "8px 10px", background: "#111", borderRadius: 6 }}>
+            <p style={{ margin: 0, fontSize: 11, color: "#888" }}>{stat.label}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 15, fontWeight: 600 }}>{stat.value}</p>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)}
       {/* ── Data export ── */}
       <div style={{ padding: 16, background: "#1a1a1a", borderRadius: 8, marginBottom: 24 }}>
         <h2 style={{ margin: "0 0 8px", fontSize: 16 }}>Export my data</h2>

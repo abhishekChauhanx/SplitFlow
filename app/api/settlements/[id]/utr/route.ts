@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
+import { recalculateAndSaveTrustScore } from "@/lib/trust-score";
 
 export async function POST(
   req: NextRequest,
@@ -43,6 +44,10 @@ export async function POST(
     where: { id },
     data: { utrNumber: utrNumber.trim().toUpperCase() },
   });
+
+  // Recalculate the payer's trust score — submitting a UTR raises their
+  // UTR submission rate. Never blocks the response if scoring fails.
+  await recalculateAndSaveTrustScore(settlement.fromUserId).catch(() => {});
 
   return NextResponse.json(updated);
 }
