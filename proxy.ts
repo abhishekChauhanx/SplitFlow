@@ -42,7 +42,8 @@ export async function proxy(req: NextRequest) {
   const isPublic =
     pathname === "/login" ||
     pathname === "/account-deleted" ||
-    pathname.startsWith("/join/");
+    pathname.startsWith("/join/") || 
+    pathname.startsWith("/kitty/join/") ; 
     // NOTE: "/pay/" removed — payment pages now require login like everything else
 
   if (!isPublic && !isValidSession) {
