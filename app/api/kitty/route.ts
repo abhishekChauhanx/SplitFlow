@@ -6,28 +6,51 @@ export async function POST(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { title, description, targetPaise, deadline, collectorUpiId, contributorUserIds } = await req.json();
+  const { title, description, targetPaise, deadline, collectorUpiId, contributorEmails } = await req.json();
 
-  if (!title || !targetPaise || !contributorUserIds || contributorUserIds.length === 0) {
-    return NextResponse.json({ error: "Title, target amount, and at least one contributor are required" }, { status: 400 });
+  if (!title?.trim()) {
+    return NextResponse.json({ error: "Title is required" }, { status: 400 });
+  }
+  if (!targetPaise || targetPaise <= 0) {
+    return NextResponse.json({ error: "Target amount is required" }, { status: 400 });
+  }
+  if (!contributorEmails || contributorEmails.length === 0) {
+    return NextResponse.json({ error: "Add at least one contributor's email" }, { status: 400 });
   }
 
-  // Default: split target equally among contributors (organizer can adjust individual amounts later)
+  // Resolve each email to a real, existing user — kitty contributors must
+  // have accounts (same as vendor subscribers), since contributions tie to userId.
+  const normalizedEmails: string[] = contributorEmails.map((e: string) => e.trim().toLowerCase());
+  const users = await prisma.user.findMany({
+    where: { email: { in: normalizedEmails } },
+  });
+
+  const foundEmails = new Set(users.map((u) => u.email?.toLowerCase()));
+  const notFound = normalizedEmails.filter((e) => !foundEmails.has(e));
+
+  if (notFound.length > 0) {
+    return NextResponse.json(
+      { error: `No SplitFlow account found for: ${notFound.join(", ")}. They need to sign up first.` },
+      { status: 400 }
+    );
+  }
+
+  const contributorUserIds = users.map((u) => u.id);
   const perPersonPaise = Math.floor(targetPaise / contributorUserIds.length);
   const remainder = targetPaise - perPersonPaise * contributorUserIds.length;
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const organizer = await prisma.user.findUnique({ where: { id: userId } });
 
   const kitty = await prisma.kitty.create({
     data: {
-      title,
-      description: description || null,
+      title: title.trim(),
+      description: description?.trim() || null,
       targetPaise,
       organizerId: userId,
       deadline: deadline ? new Date(deadline) : null,
-      collectorUpiId: collectorUpiId || user?.upiId || null,
+      collectorUpiId: collectorUpiId || organizer?.upiId || null,
       contributions: {
-        create: contributorUserIds.map((uid: string, index: number) => ({
+        create: contributorUserIds.map((uid, index) => ({
           userId: uid,
           amountPaise: index === contributorUserIds.length - 1 ? perPersonPaise + remainder : perPersonPaise,
         })),
@@ -43,7 +66,6 @@ export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  // Kitties this user organized OR is a contributor in
   const kitties = await prisma.kitty.findMany({
     where: {
       OR: [

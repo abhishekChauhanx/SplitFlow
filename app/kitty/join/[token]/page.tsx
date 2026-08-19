@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import QRCode from "qrcode";
+import { useModal } from "@/components/ModalProvider";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
+import Spinner from "@/components/Spinner";
 
 export default function KittyJoinPage() {
   const { token } = useParams();
   const router = useRouter();
+  const { confirm } = useModal();
   const [preview, setPreview] = useState<any>(null);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
@@ -32,9 +36,17 @@ export default function KittyJoinPage() {
 
         setPreview(data);
 
+        // Already paid — show a dialog explaining this, then redirect
         if (data.myStatus === "paid" || data.myStatus === "confirmed") {
-          setDone(true);
           setLoading(false);
+          await confirm({
+            title: "Already contributed",
+            message: `You've already contributed to "${data.title}". ${
+              data.myStatus === "confirmed" ? "It's been confirmed by the organizer." : "Waiting on the organizer to confirm."
+            }`,
+            mode: "alert",
+          });
+          router.push("/kitty");
           return;
         }
 
@@ -43,9 +55,7 @@ export default function KittyJoinPage() {
         }
 
         if (data.collectorUpiId) {
-          const suggestedAmount = data.myAmountPaise
-            ? (data.myAmountPaise / 100).toFixed(2)
-            : "";
+          const suggestedAmount = data.myAmountPaise ? (data.myAmountPaise / 100).toFixed(2) : "";
           const upiUrl = `upi://pay?pa=${data.collectorUpiId}&pn=${encodeURIComponent(data.organizerName)}&${suggestedAmount ? `am=${suggestedAmount}&` : ""}cu=INR&tn=${encodeURIComponent(data.title)}`;
           const qr = await QRCode.toDataURL(upiUrl);
           setQrCode(qr);
@@ -70,11 +80,7 @@ export default function KittyJoinPage() {
       const res = await fetch(`/api/kitty/join/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amountPaise: Math.round(parseFloat(amount) * 100),
-          paymentMethod,
-          utrNumber,
-        }),
+        body: JSON.stringify({ amountPaise: Math.round(parseFloat(amount) * 100), paymentMethod, utrNumber }),
       });
 
       let data: any = null;
@@ -85,6 +91,12 @@ export default function KittyJoinPage() {
 
       if (res.status === 401) {
         router.push(`/login?from=/kitty/join/${token}`);
+        return;
+      }
+
+      if (res.status === 409) {
+        await confirm({ title: "Already contributed", message: data.error, mode: "alert" });
+        router.push("/kitty");
         return;
       }
 
@@ -101,20 +113,20 @@ export default function KittyJoinPage() {
     }
   }
 
-  if (loading) return <p style={{ textAlign: "center", marginTop: 80 }}>Loading...</p>;
+  if (loading) return <SFLoaderOverlay visible={true} label="Loading invite" />;
 
   if (error && !preview) {
     return <div style={{ textAlign: "center", marginTop: 80 }}><p style={{ color: "#f87171" }}>{error}</p></div>;
   }
+
+  if (!preview) return null; // redirected via dialog above
 
   if (done) {
     return (
       <div style={{ maxWidth: 380, margin: "80px auto", padding: "0 16px", textAlign: "center" }}>
         <p style={{ fontSize: 48 }}>✅</p>
         <h2>Contribution recorded!</h2>
-        <p style={{ color: "#888" }}>
-          {preview?.organizerName} will confirm once they verify your payment.
-        </p>
+        <p style={{ color: "#888" }}>{preview.organizerName} will confirm once they verify your payment.</p>
         <a href="/kitty" style={{ color: "#60a5fa", fontSize: 13 }}>Go to collection pools →</a>
       </div>
     );
@@ -124,9 +136,7 @@ export default function KittyJoinPage() {
     <div style={{ maxWidth: 400, margin: "40px auto", padding: "0 16px" }}>
       <div style={{ textAlign: "center", marginBottom: 24 }}>
         <h1 style={{ margin: "0 0 4px" }}>{preview.title}</h1>
-        {preview.description && (
-          <p style={{ margin: "0 0 8px", color: "#888", fontSize: 13 }}>{preview.description}</p>
-        )}
+        {preview.description && <p style={{ margin: "0 0 8px", color: "#888", fontSize: 13 }}>{preview.description}</p>}
         <p style={{ margin: 0, color: "#888", fontSize: 13 }}>Organized by {preview.organizerName}</p>
         <p style={{ margin: "8px 0 0", fontSize: 13, color: "#666" }}>
           Target: ₹{(preview.targetPaise / 100).toFixed(0)} · {preview.paidCount}/{preview.contributorCount} contributed
@@ -145,15 +155,7 @@ export default function KittyJoinPage() {
           <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
             Amount (₹) {preview.myAmountPaise ? "— suggested share" : ""}
           </label>
-          <input
-            type="number"
-            value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              // Regenerate the QR with the actual amount they're entering
-            }}
-            style={{ width: "100%" }}
-          />
+          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: "100%" }} />
         </div>
 
         {qrCode && (
@@ -174,12 +176,7 @@ export default function KittyJoinPage() {
         {paymentMethod === "upi" && (
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>UTR / reference number</label>
-            <input
-              maxLength={12}
-              value={utrNumber}
-              onChange={(e) => setUtrNumber(e.target.value.toUpperCase())}
-              style={{ width: "100%", fontFamily: "monospace" }}
-            />
+            <input maxLength={12} value={utrNumber} onChange={(e) => setUtrNumber(e.target.value.toUpperCase())} style={{ width: "100%", fontFamily: "monospace" }} />
           </div>
         )}
 
@@ -190,7 +187,7 @@ export default function KittyJoinPage() {
           disabled={submitting}
           style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "10px", width: "100%", cursor: "pointer" }}
         >
-          {submitting ? "Recording..." : "I've contributed — record it"}
+          {submitting ? <Spinner /> : "I've contributed — record it"}
         </button>
       </div>
     </div>

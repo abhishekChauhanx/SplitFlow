@@ -3,10 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import BackButton from "@/components/BackButton";
+import RefreshButton from "@/components/RefreshButton";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 
 export default function KittyDashboardPage() {
   const [kitties, setKitties] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -14,10 +16,18 @@ export default function KittyDashboardPage() {
     if (res.ok) setKitties(await res.json());
   }, []);
 
+  const loadMe = useCallback(async () => {
+    const res = await fetch("/api/me");
+    if (res.ok) setCurrentUserId((await res.json()).userId);
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([load(), loadMe()]);
+  }, [load, loadMe]);
+
   useEffect(() => {
-    fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
-    load().finally(() => setLoading(false));
-  }, [load]);
+    refreshAll().finally(() => setInitialLoading(false));
+  }, [refreshAll]);
 
   function statusBadge(status: string) {
     if (status === "collecting") return { bg: "#172554", text: "#60a5fa", label: "🟡 Collecting" };
@@ -25,7 +35,7 @@ export default function KittyDashboardPage() {
     return { bg: "#14532d", text: "#86efac", label: "✓ Refunded" };
   }
 
-  if (loading) return <p style={{ textAlign: "center", marginTop: 80 }}>Loading...</p>;
+  if (initialLoading) return <SFLoaderOverlay visible={true} label="Loading collection pools" />;
 
   const organizing = kitties.filter((k) => k.organizerId === currentUserId);
   const contributing = kitties.filter((k) => k.organizerId !== currentUserId);
@@ -36,8 +46,8 @@ export default function KittyDashboardPage() {
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <BackButton href="/dashboard" />
           <h1 style={{ margin: 0, fontSize: 20 }}>Collection pools</h1>
+          <RefreshButton onRefresh={refreshAll} label="Refreshing collection pools" />
         </div>
-        <button onClick={load} style={{ fontSize: 13 }}>🔄 Refresh</button>
       </div>
       <p style={{ color: "#888", fontSize: 13, marginBottom: 20 }}>
         Pool money together for gifts, events, or shared funds — track contributions and refund the leftover automatically.
@@ -119,9 +129,7 @@ export default function KittyDashboardPage() {
                     </span>
                   </div>
                   {myContribution?.status === "pending" && (
-                    <p style={{ margin: "8px 0 0", fontSize: 12, color: "#f59e0b" }}>
-                      ⏳ You haven't contributed yet
-                    </p>
+                    <p style={{ margin: "8px 0 0", fontSize: 12, color: "#f59e0b" }}>⏳ You haven't contributed yet</p>
                   )}
                   {(myContribution?.status === "paid" || myContribution?.status === "confirmed") && (
                     <p style={{ margin: "8px 0 0", fontSize: 12, color: "#86efac" }}>

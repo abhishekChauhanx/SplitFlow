@@ -3,18 +3,20 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import BackButton from "@/components/BackButton";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
+import { useModal } from "@/components/ModalProvider";
 
 type ContributorInput = { name: string; email: string };
 
 export default function NewKittyPage() {
   const router = useRouter();
+  const { confirm } = useModal();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [deadline, setDeadline] = useState("");
   const [contributors, setContributors] = useState<ContributorInput[]>([{ name: "", email: "" }]);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
 
   function addContributor() {
     setContributors([...contributors, { name: "", email: "" }]);
@@ -29,22 +31,28 @@ export default function NewKittyPage() {
   }
 
   async function create() {
-    setError("");
     const validContributors = contributors.filter((c) => c.email.trim());
+    if (!title.trim()) {
+      await confirm({ title: "Title required", message: "Please enter a title for this collection.", mode: "alert" });
+      return;
+    }
+    if (!targetAmount || parseFloat(targetAmount) <= 0) {
+      await confirm({ title: "Target amount required", message: "Please enter a target amount.", mode: "alert" });
+      return;
+    }
     if (validContributors.length === 0) {
-      setError("Add at least one contributor's email");
+      await confirm({ title: "Add contributors", message: "Add at least one contributor's email.", mode: "alert" });
       return;
     }
 
     setCreating(true);
     try {
-      // Resolve emails to userIds first
       const res = await fetch("/api/kitty", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title,
-          description,
+          title: title.trim(),
+          description: description.trim(),
           targetPaise: Math.round(parseFloat(targetAmount) * 100),
           deadline: deadline || null,
           contributorEmails: validContributors.map((c) => c.email.trim()),
@@ -52,7 +60,7 @@ export default function NewKittyPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error || "Failed to create kitty");
+        await confirm({ title: "Couldn't create collection", message: data.error, mode: "alert" });
         return;
       }
       router.push(`/kitty/${data.id}`);
@@ -63,8 +71,10 @@ export default function NewKittyPage() {
 
   return (
     <div style={{ maxWidth: 480, margin: "40px auto", padding: "0 16px" }}>
+      <SFLoaderOverlay visible={creating} label="Creating collection pool" />
+
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20 }}>
-        <BackButton href="/dashboard" />
+        <BackButton href="/kitty" />
         <h1 style={{ margin: 0, fontSize: 20 }}>New collection pool</h1>
       </div>
       <p style={{ color: "#888", marginBottom: 20, fontSize: 13 }}>
@@ -95,6 +105,9 @@ export default function NewKittyPage() {
         <h2 style={{ fontSize: 15, margin: 0 }}>Contributors</h2>
         <button onClick={addContributor} style={{ fontSize: 13 }}>+ Add</button>
       </div>
+      <p style={{ fontSize: 12, color: "#666", margin: "0 0 12px" }}>
+        Contributors need an existing SplitFlow account — ask them to sign up first if they don't have one.
+      </p>
 
       {contributors.map((c, i) => (
         <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
@@ -112,11 +125,9 @@ export default function NewKittyPage() {
         </p>
       )}
 
-      {error && <p style={{ color: "#f87171", fontSize: 13 }}>{error}</p>}
-
       <button
         onClick={create}
-        disabled={!title || !targetAmount || creating}
+        disabled={creating}
         style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 }}
       >
         {creating ? "Creating..." : "Create collection pool"}
