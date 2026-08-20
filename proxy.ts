@@ -42,19 +42,19 @@ export async function proxy(req: NextRequest) {
   const isPublic =
     pathname === "/login" ||
     pathname === "/account-deleted" ||
-    pathname.startsWith("/join/") || 
-    pathname.startsWith("/kitty/join/") ; 
+    pathname.startsWith("/join/") ;
+    // pathname.startsWith("/kitty/join/") ; 
     // NOTE: "/pay/" removed — payment pages now require login like everything else
 
   if (!isPublic && !isValidSession) {
-    const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("from", pathname);
-    return NextResponse.redirect(loginUrl);
-  }
+  const loginUrl = new URL("/login", req.url);
+  loginUrl.searchParams.set("from", pathname);
+  return NextResponse.redirect(loginUrl);
+}
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|sw.js|login).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|sw.js).*)"],
 };

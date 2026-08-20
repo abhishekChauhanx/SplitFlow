@@ -20,7 +20,12 @@ export default function KittyJoinPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
-
+async function regenerateQr(newAmount: string) {
+  if (!preview?.collectorUpiId || !newAmount || parseFloat(newAmount) <= 0) return;
+  const upiUrl = `upi://pay?pa=${preview.collectorUpiId}&pn=${encodeURIComponent(preview.organizerName)}&am=${parseFloat(newAmount).toFixed(2)}&cu=INR&tn=${encodeURIComponent(preview.title)}`;
+  const qr = await QRCode.toDataURL(upiUrl);
+  setQrCode(qr);
+}
   useEffect(() => {
     fetch(`/api/kitty/join/${token}`)
       .then(async (r) => {
@@ -155,7 +160,15 @@ export default function KittyJoinPage() {
           <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
             Amount (₹) {preview.myAmountPaise ? "— suggested share" : ""}
           </label>
-          <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: "100%" }} />
+          <input
+  type="number"
+  value={amount}
+  onChange={(e) => {
+    setAmount(e.target.value);
+    regenerateQr(e.target.value);
+  }}
+  style={{ width: "100%" }}
+/>
         </div>
 
         {qrCode && (
