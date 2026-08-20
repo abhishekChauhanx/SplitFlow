@@ -10,28 +10,64 @@ type ContributorInput = { name: string; email: string };
 
 export default function NewKittyPage() {
   const router = useRouter();
-  const { confirm } = useModal();
+  const { confirm, promptForm } = useModal();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [deadline, setDeadline] = useState("");
-  const [contributors, setContributors] = useState<ContributorInput[]>([{ name: "", email: "" }]);
+  const [collectorUpiId, setCollectorUpiId] = useState("");
+  const [contributors, setContributors] = useState<ContributorInput[]>([]);
   const [creating, setCreating] = useState(false);
 
-  function addContributor() {
-    setContributors([...contributors, { name: "", email: "" }]);
+  async function openContributorForm(editingIndex: number | null) {
+    const existing = editingIndex !== null ? contributors[editingIndex] : null;
+
+    const result = await promptForm({
+      title: editingIndex !== null ? "Edit contributor" : "Add contributor",
+      fields: [
+        { key: "name", label: "Name", placeholder: "e.g. Rahul Sharma", required: true },
+        { key: "email", label: "Email", placeholder: "e.g. rahul@example.com", type: "email", required: true },
+      ],
+      defaultValues: existing ? { name: existing.name, email: existing.email } : undefined,
+      confirmLabel: editingIndex !== null ? "Save" : "Add",
+    });
+
+    if (!result) return; // cancelled
+
+    const normalizedEmail = result.email.trim().toLowerCase();
+    const dupeIndex = contributors.findIndex(
+      (c, i) => i !== editingIndex && normalizedEmail && c.email.trim().toLowerCase() === normalizedEmail
+    );
+    if (dupeIndex !== -1) {
+      await confirm({
+        title: "Duplicate email",
+        message: `"${result.email}" is already in this collection's contributor list.`,
+        mode: "alert",
+      });
+      return;
+    }
+
+    const value: ContributorInput = { name: result.name, email: result.email };
+
+    if (editingIndex !== null) {
+      setContributors(contributors.map((c, i) => (i === editingIndex ? value : c)));
+    } else {
+      setContributors([...contributors, value]);
+    }
   }
 
-  function updateContributor(i: number, field: string, value: string) {
-    setContributors(contributors.map((c, idx) => (idx === i ? { ...c, [field]: value } : c)));
-  }
-
-  function removeContributor(i: number) {
+  async function removeContributor(i: number) {
+    const target = contributors[i];
+    const ok = await confirm({
+      title: "Remove contributor?",
+      message: `Remove "${target.name}" (${target.email}) from this collection?`,
+      confirmLabel: "Remove",
+    });
+    if (!ok) return;
     setContributors(contributors.filter((_, idx) => idx !== i));
   }
 
   async function create() {
-    const validContributors = contributors.filter((c) => c.email.trim());
     if (!title.trim()) {
       await confirm({ title: "Title required", message: "Please enter a title for this collection.", mode: "alert" });
       return;
@@ -40,8 +76,8 @@ export default function NewKittyPage() {
       await confirm({ title: "Target amount required", message: "Please enter a target amount.", mode: "alert" });
       return;
     }
-    if (validContributors.length === 0) {
-      await confirm({ title: "Add contributors", message: "Add at least one contributor's email.", mode: "alert" });
+    if (contributors.length === 0) {
+      await confirm({ title: "Add contributors", message: "Add at least one contributor.", mode: "alert" });
       return;
     }
 
@@ -55,14 +91,19 @@ export default function NewKittyPage() {
           description: description.trim(),
           targetPaise: Math.round(parseFloat(targetAmount) * 100),
           deadline: deadline || null,
-          contributorEmails: validContributors.map((c) => c.email.trim()),
+          collectorUpiId: collectorUpiId.trim() || null,
+          contributorEmails: contributors.map((c) => c.email.trim()),
         }),
       });
       const data = await res.json();
+
       if (!res.ok) {
+        // Turn the loader off BEFORE opening the dialog — this is Fix 2
+        setCreating(false);
         await confirm({ title: "Couldn't create collection", message: data.error, mode: "alert" });
         return;
       }
+
       router.push(`/kitty/${data.id}`);
     } finally {
       setCreating(false);
@@ -96,39 +137,89 @@ export default function NewKittyPage() {
         <input type="number" placeholder="e.g. 5000" value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)} style={{ width: "100%" }} />
       </div>
 
-      <div style={{ marginBottom: 20 }}>
+      <div style={{ marginBottom: 12 }}>
         <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>Deadline (optional)</label>
         <input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} style={{ width: "100%" }} />
       </div>
 
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4 }}>
+          Your UPI ID (where contributions get paid)
+        </label>
+        <input
+          placeholder="e.g. yourname@okhdfcbank"
+          value={collectorUpiId}
+          onChange={(e) => setCollectorUpiId(e.target.value)}
+          style={{ width: "100%" }}
+        />
+        <p style={{ fontSize: 11, color: "#666", margin: "4px 0 0" }}>
+          Contributors will see a QR code to pay directly to this UPI ID.
+        </p>
+      </div>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <h2 style={{ fontSize: 15, margin: 0 }}>Contributors</h2>
-        <button onClick={addContributor} style={{ fontSize: 13 }}>+ Add</button>
+        <button
+          onClick={() => openContributorForm(null)}
+          style={{ fontSize: 13, background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "6px 12px", cursor: "pointer" }}
+        >
+          + Add contributor
+        </button>
       </div>
       <p style={{ fontSize: 12, color: "#666", margin: "0 0 12px" }}>
         Contributors need an existing SplitFlow account — ask them to sign up first if they don't have one.
       </p>
 
+      {contributors.length === 0 && (
+        <div style={{ padding: 16, background: "#1a1a1a", borderRadius: 8, textAlign: "center", marginBottom: 20 }}>
+          <p style={{ color: "#888", margin: 0, fontSize: 13 }}>No contributors added yet.</p>
+        </div>
+      )}
+
       {contributors.map((c, i) => (
-        <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <input placeholder="Name" value={c.name} onChange={(e) => updateContributor(i, "name", e.target.value)} style={{ flex: 1 }} />
-          <input placeholder="Email" value={c.email} onChange={(e) => updateContributor(i, "email", e.target.value)} style={{ flex: 1 }} />
-          {contributors.length > 1 && (
-            <button onClick={() => removeContributor(i)} style={{ color: "#f87171", background: "none", border: "none", cursor: "pointer" }}>✕</button>
-          )}
+        <div
+          key={i}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "10px 12px",
+            background: "#1a1a1a",
+            borderRadius: 8,
+            marginBottom: 8,
+          }}
+        >
+          <div>
+            <p style={{ margin: 0, fontSize: 14, color: "#eee" }}>{c.name}</p>
+            <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>{c.email}</p>
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button
+              onClick={() => openContributorForm(i)}
+              style={{ fontSize: 12, background: "transparent", border: "1px solid #333", borderRadius: 4, color: "#ccc", padding: "4px 10px", cursor: "pointer" }}
+            >
+              Edit
+            </button>
+            <button
+              onClick={() => removeContributor(i)}
+              style={{ fontSize: 12, background: "transparent", border: "1px solid #7f1d1d", borderRadius: 4, color: "#f87171", padding: "4px 10px", cursor: "pointer" }}
+            >
+              Remove
+            </button>
+          </div>
         </div>
       ))}
 
-      {targetAmount && contributors.filter((c) => c.email.trim()).length > 0 && (
+      {targetAmount && contributors.length > 0 && (
         <p style={{ fontSize: 12, color: "#666", margin: "8px 0" }}>
-          ≈ ₹{(parseFloat(targetAmount) / contributors.filter((c) => c.email.trim()).length).toFixed(0)} per person
+          ≈ ₹{(parseFloat(targetAmount) / contributors.length).toFixed(0)} per person
         </p>
       )}
 
       <button
         onClick={create}
         disabled={creating}
-        style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 14, cursor: "pointer", width: "100%", marginTop: 12 }}
+        style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 14, cursor: "pointer", width: "100%", marginTop: 20 }}
       >
         {creating ? "Creating..." : "Create collection pool"}
       </button>
