@@ -31,6 +31,9 @@ model User {
   tenantReceipts   RentReceipt[] @relation("TenantReceipts")
   landlordReceipts RentReceipt[] @relation("LandlordReceipts")
   trustScore TrustScore?
+  kittiesOrganized     Kitty[]              @relation("KittyOrganizer")
+  kittyContributions   KittyContribution[]  @relation("KittyContributor")
+  kittyExpensesLogged  KittyExpense[]       @relation("KittySpender")
 }
 
 model GroupInvite {
@@ -273,4 +276,52 @@ model TrustScore {
   completionRate        Float    @default(0)
   totalSettlements      Int      @default(0) // sample size — low sample sizes get a "New member" label regardless of score
   lastCalculatedAt      DateTime @default(now())
+}
+
+model Kitty {
+  id              String              @id @default(cuid())
+  title           String
+  description     String?
+  targetPaise     Int
+  organizerId     String
+  organizer       User                @relation("KittyOrganizer", fields: [organizerId], references: [id])
+  deadline        DateTime?
+  status          String              @default("collecting") // "collecting" | "closed" | "refunded"
+  token           String              @unique @default(cuid()) // for the contribute link
+  collectorUpiId  String?             // where contributions actually get paid to (organizer's or a nominated collector's UPI ID)
+  createdAt       DateTime            @default(now())
+  closedAt        DateTime?
+  contributions   KittyContribution[]
+  expenses        KittyExpense[]
+}
+
+model KittyContribution {
+  id              String    @id @default(cuid())
+  kittyId         String
+  kitty           Kitty     @relation(fields: [kittyId], references: [id])
+  userId          String
+  user            User      @relation("KittyContributor", fields: [userId], references: [id])
+  amountPaise     Int       // what they were asked to contribute (target / contributor count, or custom)
+  paidAmountPaise Int?      // what they actually paid — null until they contribute
+  paymentMethod   String?   // "upi" | "cash"
+  utrNumber       String?
+  status          String    @default("pending") // "pending" | "paid" | "confirmed"
+  paidAt          DateTime?
+  confirmedAt     DateTime?
+  refundPaise     Int?      // calculated when the kitty closes, if there's a leftover
+  refundStatus    String?   // "pending" | "sent" | "confirmed" — null until kitty closes
+  createdAt       DateTime  @default(now())
+
+  @@unique([kittyId, userId])
+}
+
+model KittyExpense {
+  id          String   @id @default(cuid())
+  kittyId     String
+  kitty       Kitty    @relation(fields: [kittyId], references: [id])
+  description String
+  amountPaise Int
+  spentById   String
+  spentBy     User     @relation("KittySpender", fields: [spentById], references: [id])
+  createdAt   DateTime @default(now())
 }

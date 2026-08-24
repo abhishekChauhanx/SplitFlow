@@ -95,6 +95,9 @@ export default function UserAvatarMenu({
           <Link href="/tenant/dashboard" style={{ fontSize: 13, color: "#888" }}>
   My payments
 </Link>
+<Link href="/kitty" style={{ fontSize: 13, color: "#888" }}>
+  Collection pools
+</Link>
           <button
             onClick={() => {
               setOpen(false);
