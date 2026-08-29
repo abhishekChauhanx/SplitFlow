@@ -1068,6 +1068,15 @@ export default function SettlePage() {
                   </div>
                 )}
 
+                {h.arbitratedAt && (
+  <div style={{ marginTop: 8, padding: "8px 10px", background: "#111", borderRadius: 6, fontSize: 12 }}>
+    <p style={{ margin: 0, color: "#93c5fd" }}>
+      ⚖ Resolved by admin in favor of {h.arbitrationDecision === "payer" ? h.fromName : h.toName}
+    </p>
+    <p style={{ margin: "4px 0 0", color: "#888" }}>{h.arbitrationNote}</p>
+  </div>
+)}
+
                 {/* Actions */}
                 {h.status !== "both_confirmed" && h.status !== "disputed" && (
                   <div className="flex flex-wrap gap-2 items-center pt-1">

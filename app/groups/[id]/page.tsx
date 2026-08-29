@@ -35,8 +35,6 @@ type PendingRequest = {
   expense: { description: string; amountPaise: number };
 };
 
-// Shared dialog chrome — mirrors the existing "Edit expense" modal's look
-// (dark card, icon title bar, footer buttons) so all dialogs stay consistent.
 function Dialog({
   icon,
   iconColor,
@@ -180,7 +178,7 @@ function DialogButton({
 
 export default function GroupDetailPage() {
   const { id } = useParams();
-  const { confirm } = useModal();
+  const { confirm, prompt } = useModal(); // added `prompt` for the arbitration note dialog
   const [initialLoading, setInitialLoading] = useState(true);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
@@ -205,35 +203,80 @@ export default function GroupDetailPage() {
   const [percentInputs, setPercentInputs] = useState<Record<string, string>>({});
   const [shareInputs, setShareInputs] = useState<Record<string, string>>({});
 
-  // Dialog visibility — one per modal-based action
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showPlaceholderModal, setShowPlaceholderModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showExpenseModal, setShowExpenseModal] = useState(false);
 
-  // Loading states — one per listed action
   const [addingMember, setAddingMember] = useState(false);
   const [generatingInvite, setGeneratingInvite] = useState(false);
   const [addingPlaceholder, setAddingPlaceholder] = useState(false);
   const [addingExpense, setAddingExpense] = useState(false);
-  // Lets the overlay say "Saving expense" vs. "Merging "food"" depending on
-  // which branch of addExpense() is running, instead of a single fixed label.
   const [addingExpenseLabel, setAddingExpenseLabel] = useState("Saving expense");
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
   const [requestingPermissionId, setRequestingPermissionId] = useState<string | null>(null);
 
-  // Permission system state
-  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]); // for owner
-  const [myPermissions, setMyPermissions] = useState<Record<string, string>>({}); // expenseId -> status
-  const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, string>>({}); // expenseId -> permissionId
+  const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [myPermissions, setMyPermissions] = useState<Record<string, string>>({});
+  const [pendingRequestIds, setPendingRequestIds] = useState<Record<string, string>>({});
 
   const [memberScores, setMemberScores] = useState<Record<string, any>>({});
-  // Same-tick safety net against double-firing within one poll. The real guard
-  // against repeat notifications on remount/navigation is server-side (the
-  // `notified` flag on EditPermission, and deleting denied rows once shown) —
-  // see loadMyPermissions below.
   const notifiedPermissionsRef = useRef<Set<string>>(new Set());
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [disputes, setDisputes] = useState<any[]>([]);
+  const [arbitratingId, setArbitratingId] = useState<string | null>(null);
+
+  const loadDisputes = useCallback(async () => {
+    const res = await fetch(`/api/groups/${id}/disputes`);
+    if (res.ok) {
+      setIsAdmin(true);
+      setDisputes(await res.json());
+    } else {
+      setIsAdmin(false);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    loadDisputes();
+  }, [loadDisputes]);
+
+  // Rewritten: uses the modal's prompt() dialog instead of the native
+  // window.prompt(). Sequencing: dialog opens first (no loader behind it,
+  // since nothing is loading yet) -> user types a note and clicks OK ->
+  // dialog closes -> loader appears while the actual API call runs.
+  async function arbitrate(settlementId: string, decision: "payer" | "payee") {
+    const note = await prompt({
+      title: decision === "payer" ? "Resolve in favor of the payer" : "Resolve in favor of the payee",
+      message:
+        decision === "payer"
+          ? "Why are you siding with the payer? (e.g. you saw the cash change hands, UTR matches their bank statement)"
+          : "Why are you siding with the payee? (e.g. no matching transaction found, they say nothing arrived)",
+      placeholder: "Explain your decision...",
+      confirmLabel: "Resolve",
+      required: true,
+    });
+    if (!note) return; // cancelled — no loader, no API call
+
+    setArbitratingId(settlementId); // loader appears only after the dialog is confirmed
+    try {
+      const res = await fetch(`/api/settlements/${settlementId}/arbitrate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, note }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setArbitratingId(null); // clear loader BEFORE opening the error dialog
+        await confirm({ title: "Couldn't resolve", message: data.error, mode: "alert" });
+        return;
+      }
+      await loadDisputes();
+    } finally {
+      setArbitratingId(null);
+    }
+  }
 
   const loadGroup = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}`);
@@ -253,18 +296,11 @@ export default function GroupDetailPage() {
     if (res.ok) setSummary(await res.json());
   }, [id]);
 
-  // Same endpoint the /recurring page reads from — kept in sync here via
-  // the initial load, the focus/visibility refetch, and refreshAll, so a
-  // template deleted on /recurring disappears from this page's table too
-  // as soon as the user comes back, without any special-case wiring.
   const loadRecurringTemplates = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/recurring`);
     if (res.ok) setRecurringTemplates(await res.json());
   }, [id]);
 
-  // Scoped to this group via groupId — without this, incoming requests from
-  // every group the user owns expenses in would show up here regardless of
-  // which group's page is actually open.
   const loadPendingRequests = useCallback(() => {
     return fetch(`/api/edit-permissions/pending?groupId=${id}`)
       .then((r) => r.json())
@@ -273,9 +309,6 @@ export default function GroupDetailPage() {
       });
   }, [id]);
 
-  // Scoped to this group via groupId, same reasoning as above. Notifications
-  // are acknowledged server-side right after being shown, so they can't come
-  // back on the next poll, on remount, or after navigating to another group.
   const loadMyPermissions = useCallback(() => {
     return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
       .then((r) => r.json())
@@ -286,7 +319,7 @@ export default function GroupDetailPage() {
         const idMap: Record<string, string> = {};
 
         for (const p of data) {
-          if (!p.expense) continue; // orphaned permission for a deleted expense
+          if (!p.expense) continue;
 
           map[p.expenseId] = p.status;
           idMap[p.expenseId] = p.id;
@@ -309,8 +342,6 @@ export default function GroupDetailPage() {
               mode: "alert",
             });
             fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
-            // Denied rows get deleted server-side once acknowledged — drop it
-            // from local state too so the button reverts to "Request edit access"
             delete map[p.expenseId];
             delete idMap[p.expenseId];
           }
@@ -355,6 +386,7 @@ export default function GroupDetailPage() {
       document.removeEventListener("visibilitychange", handleFocusOrVisible);
     };
   }, [id, loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
+
   useEffect(() => {
     if (members.length === 0) return;
     Promise.all(
@@ -381,8 +413,9 @@ export default function GroupDetailPage() {
       loadPendingRequests(),
       loadMyPermissions(),
       loadRecurringTemplates(),
+      loadDisputes(),
     ]);
-  }, [loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates]);
+  }, [loadExpenses, loadGroup, loadSummary, loadPendingRequests, loadMyPermissions, loadRecurringTemplates, loadDisputes]);
 
   async function respondToRequest(permissionId: string, decision: "approved" | "denied") {
     await fetch(`/api/edit-permissions/${permissionId}`, {
@@ -393,10 +426,6 @@ export default function GroupDetailPage() {
     loadPendingRequests();
   }
 
-  // e) Request edit access — replaces alert() with modal, adds per-expense loading.
-  // The overlay is cleared *before* any confirm()/info dialog is awaited —
-  // otherwise the full-page loader stays on top of the dialog and blocks
-  // clicks on its buttons until the dialog itself resolves.
   async function requestEditPermission(expenseId: string, action: string) {
     setRequestingPermissionId(expenseId);
     try {
@@ -439,8 +468,6 @@ export default function GroupDetailPage() {
     }
   }
 
-  // e) Delete expense — native confirm() replaced with modal, adds per-expense loading.
-  // Same overlay-before-dialog fix as above.
   async function deleteExpense(expenseId: string) {
     const ok = await confirm({
       title: "Delete expense?",
@@ -471,8 +498,6 @@ export default function GroupDetailPage() {
     }
   }
 
-  // e) Save edit — alert() replaced with modal, adds loading.
-  // Same overlay-before-dialog fix as above.
   async function saveEditExpense(expenseId: string) {
     const ok = await confirm({
       title: "Save changes?",
@@ -517,9 +542,6 @@ export default function GroupDetailPage() {
     }
   }
 
-  // b) Generate invite link — generates immediately, then opens a dialog
-  // showing the link. OK-only (no cancel): once generated, there's nothing
-  // to "cancel", just acknowledge and close.
   async function generateInvite() {
     setGeneratingInvite(true);
     try {
@@ -537,7 +559,6 @@ export default function GroupDetailPage() {
     setInviteLink(null);
   }
 
-  // c) Add placeholder member — dialog-based, OK/Cancel
   async function addPlaceholder() {
     if (!placeholderName.trim()) return;
     setAddingPlaceholder(true);
@@ -564,16 +585,6 @@ export default function GroupDetailPage() {
     setPlaceholderPhone("");
   }
 
-  // d) & f) Add expense — duplicate/merge warnings shown as modals, adds loading.
-  // Now triggered from the "Add expense" dialog's OK button instead of an
-  // inline "are you sure" confirm — the dialog itself is the confirmation step.
-  //
-  // Loader handling: the overlay is shown while the create call is checking
-  // for a duplicate/merge candidate, then hidden the instant we know we need
-  // to ask the user something (409 response) so it never overlaps the
-  // "Merge expense?" / "Possible duplicate" confirm dialogs. It's switched
-  // back on — with a merge-specific label — only once the user actually
-  // confirms and the real save/merge request goes out.
   async function addExpense(confirmDuplicate = false, confirmMerge = false) {
     if (!confirmDuplicate && !confirmMerge) {
       if (!description.trim() || !amount) return;
@@ -611,9 +622,6 @@ export default function GroupDetailPage() {
 
       if (res.status === 409) {
         const data = await res.json();
-        // Duplicate/merge check is done — nothing is being saved yet, so
-        // drop the loader before the confirm dialog opens instead of
-        // stacking them.
         setAddingExpense(false);
 
         if (data.mergeCandidate) {
@@ -641,7 +649,6 @@ export default function GroupDetailPage() {
       }
 
       const expense = await res.json();
-      // A merge updates an EXISTING expense — replace it in place instead of prepending a duplicate row
       setExpenses((prev) => {
         const alreadyThere = prev.some((e) => e.id === expense.id);
         return alreadyThere
@@ -674,7 +681,6 @@ export default function GroupDetailPage() {
     setError(null);
   }
 
-  // a) Add member — dialog-based, OK/Cancel
   async function addMember() {
     if (!memberEmail.trim()) return;
     setMemberError(null);
@@ -713,8 +719,6 @@ export default function GroupDetailPage() {
     setEditPaidById(expense.paidById);
   }
 
-  // Combined visible/label logic for the overlay — one flag covers both the
-  // initial page load and any in-flight action.
   const actionLoading =
     addingMember ||
     generatingInvite ||
@@ -722,7 +726,8 @@ export default function GroupDetailPage() {
     addingExpense ||
     savingEdit ||
     deletingExpenseId !== null ||
-    requestingPermissionId !== null;
+    requestingPermissionId !== null ||
+    arbitratingId !== null; // arbitration loader now included in the combined overlay flag
 
   const loaderLabel = initialLoading
     ? "Loading group"
@@ -740,7 +745,9 @@ export default function GroupDetailPage() {
                 ? "Deleting expense"
                 : requestingPermissionId !== null
                   ? "Sending request"
-                  : "";
+                  : arbitratingId !== null
+                    ? "Resolving dispute"
+                    : "";
 
   return (
     <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
@@ -792,54 +799,50 @@ export default function GroupDetailPage() {
 
       <h2>Members</h2>
       <ul>
-  {members.map((m) => {
-    const ts = memberScores[m.userId];
-    const badge = ts ? scoreBadgeColor(ts.score) : null;
-    return (
-      <li key={m.userId} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <span>
-          {m.user.name || m.user.email}
-          {m.userId === currentUserId && (
-            <span style={{ color: "#888", fontSize: 12, marginLeft: 6 }}>(me)</span>
-          )}
-        </span>
-        {ts && ts.totalSettlements > 0 && (
-          <span
-            title={`${ts.label} — based on ${ts.totalSettlements} settlements`}
-            style={{
-              fontSize: 10,
-              padding: "2px 6px",
-              borderRadius: 4,
-              background: badge!.bg,
-              color: badge!.text,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {ts.score} · {ts.label}
-          </span>
-        )}
-        {ts && ts.totalSettlements === 0 && (
-          <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#1c1917", color: "#888" }}>
-            New member
-          </span>
-        )}
-      </li>
-    );
-  })}
-</ul>
+        {members.map((m) => {
+          const ts = memberScores[m.userId];
+          const badge = ts ? scoreBadgeColor(ts.score) : null;
+          return (
+            <li key={m.userId} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span>
+                {m.user.name || m.user.email}
+                {m.userId === currentUserId && (
+                  <span style={{ color: "#888", fontSize: 12, marginLeft: 6 }}>(me)</span>
+                )}
+              </span>
+              {ts && ts.totalSettlements > 0 && (
+                <span
+                  title={`${ts.label} — based on ${ts.totalSettlements} settlements`}
+                  style={{
+                    fontSize: 10,
+                    padding: "2px 6px",
+                    borderRadius: 4,
+                    background: badge!.bg,
+                    color: badge!.text,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {ts.score} · {ts.label}
+                </span>
+              )}
+              {ts && ts.totalSettlements === 0 && (
+                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#1c1917", color: "#888" }}>
+                  New member
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
 
-      {/* a) Add member — opens dialog */}
       <button onClick={() => setShowAddMemberModal(true)}>Add member</button>
 
-      {/* b) Generate invite link — generates then opens dialog */}
       <button onClick={generateInvite} disabled={generatingInvite}>
         {generatingInvite ? <Spinner /> : "Generate invite link"}
       </button>
 
-      {/* c) Add placeholder member — opens dialog */}
       <button onClick={() => setShowPlaceholderModal(true)}>Add placeholder member</button>
 
-      {/* d) & f) Add expense — opens dialog */}
       <button onClick={openExpenseModal}>Add expense</button>
 
       {summary && <GroupSummaryCards summary={summary} recurringTemplates={recurringTemplates} />}
@@ -856,11 +859,6 @@ export default function GroupDetailPage() {
         onRequestAccess={(expenseId) => requestEditPermission(expenseId, "edit")}
       />
 
-      {/* Recurring expenses — separate table from the Expenses grid above:
-          this lists the *templates*, not individual generated expenses.
-          Read-only here; create/edit/pause/delete happens on the
-          /recurring page. Kept in sync via loadRecurringTemplates, so a
-          deleted template drops out of this list automatically. */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28 }}>
         <h2 style={{ margin: 0 }}>Recurring expenses</h2>
         <Link href={`/groups/${id}/recurring`} style={{ fontSize: 13, color: "#93c5fd" }}>
@@ -874,7 +872,70 @@ export default function GroupDetailPage() {
         <GroupRecurringGrid templates={recurringTemplates} />
       )}
 
-      {/* Add member dialog */}
+      {/* Disputes to resolve — admin only. "Payer's claim" is what the person
+          who owed money says happened; "Payee's dispute" is what the person
+          who was supposed to receive it says instead. As admin, you're
+          deciding which claim to trust since cash payments have no independent proof. */}
+      {isAdmin && disputes.length > 0 && (
+        <div style={{ marginTop: 16, padding: 12, background: "#1a0a0a", border: "1px solid #7f1d1d", borderRadius: 8 }}>
+          <h3 style={{ margin: "0 0 4px", color: "#f87171" }}>
+            ⚠ Disputes to resolve ({disputes.length})
+          </h3>
+          <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "#888" }}>
+            As group admin, review both sides and decide which claim to trust.
+          </p>
+          {disputes.map((d) => (
+            <div key={d.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid #333" }}>
+              <p style={{ margin: "0 0 6px", fontSize: 14 }}>
+                <strong>{d.fromName}</strong> → <strong>{d.toName}</strong>: ₹{(d.amountPaise / 100).toFixed(2)}
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                <div style={{ background: "#111", padding: 8, borderRadius: 6 }}>
+                  <p style={{ margin: "0 0 2px", fontSize: 11, color: "#888" }}>PAYER'S CLAIM</p>
+                  <p style={{ margin: "0 0 4px", fontSize: 10, color: "#666" }}>
+                    What {d.fromName} says they did
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12 }}>
+                    {d.paymentMethod === "cash" ? "Paid in cash" : "Paid via UPI"}
+                    {d.utrNumber && <><br />UTR: {d.utrNumber}</>}
+                  </p>
+                  {d.evidenceUrl && (
+                    <a href={d.evidenceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#60a5fa" }}>
+                      View screenshot →
+                    </a>
+                  )}
+                </div>
+                <div style={{ background: "#111", padding: 8, borderRadius: 6 }}>
+                  <p style={{ margin: "0 0 2px", fontSize: 11, color: "#888" }}>PAYEE'S DISPUTE</p>
+                  <p style={{ margin: "0 0 4px", fontSize: 10, color: "#666" }}>
+                    What {d.toName} says happened instead
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12 }}>{d.disputeReason}</p>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => arbitrate(d.id, "payer")}
+                  disabled={arbitratingId === d.id}
+                  style={{ fontSize: 12, background: "#14532d", color: "#86efac", border: "none", borderRadius: 4, padding: "6px 12px", cursor: "pointer" }}
+                >
+                  Resolve for payer
+                </button>
+                <button
+                  onClick={() => arbitrate(d.id, "payee")}
+                  disabled={arbitratingId === d.id}
+                  style={{ fontSize: 12, background: "#450a0a", color: "#fca5a5", border: "none", borderRadius: 4, padding: "6px 12px", cursor: "pointer" }}
+                >
+                  Resolve for payee
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {showAddMemberModal && (
         <Dialog
           icon="＋"
@@ -903,7 +964,6 @@ export default function GroupDetailPage() {
         </Dialog>
       )}
 
-      {/* Add placeholder member dialog */}
       {showPlaceholderModal && (
         <Dialog
           icon="＋"
@@ -940,7 +1000,6 @@ export default function GroupDetailPage() {
         </Dialog>
       )}
 
-      {/* Generate invite link dialog */}
       {showInviteModal && inviteLink && (
         <Dialog
           icon="🔗"
@@ -959,7 +1018,6 @@ export default function GroupDetailPage() {
         </Dialog>
       )}
 
-      {/* Add expense dialog */}
       {showExpenseModal && (
         <Dialog
           icon="₹"
@@ -1069,7 +1127,6 @@ export default function GroupDetailPage() {
         </Dialog>
       )}
 
-      {/* Edit expense — unchanged, rendered as a centered modal dialog */}
       {editingExpense && (
         <Dialog
           icon="✎"
