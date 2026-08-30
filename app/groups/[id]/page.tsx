@@ -1024,17 +1024,42 @@ function shareViaWhatsApp() {
     {loadingStatement && <Spinner />}
 
     {statementData && !loadingStatement && (
-      <div style={{ fontSize: 13 }}>
-        <p>Total spent: ₹{(statementData.totalSpentPaise / 100).toFixed(2)} ({statementData.expenseCount} expenses)</p>
-        <p>Settlements: {statementData.settlementsConfirmed}/{statementData.settlementsInPeriod} confirmed</p>
-        <h4>Balances</h4>
-        {statementData.currentBalances.map((b: any, i: number) => (
-          <p key={i} style={{ color: b.amountPaise >= 0 ? "#86efac" : "#f87171" }}>
-            {b.name}: {b.amountPaise >= 0 ? "is owed" : "owes"} ₹{(Math.abs(b.amountPaise) / 100).toFixed(2)}
-          </p>
-        ))}
-      </div>
-    )}
+  <div style={{ fontSize: 13 }}>
+    <p>Total spent: ₹{(statementData.totalSpentPaise / 100).toFixed(2)} ({statementData.expenseCount} expenses)</p>
+    <p>Settlements: {statementData.settlementsConfirmed}/{statementData.settlementsInPeriod} confirmed</p>
+
+    <h4>Payment status</h4>
+    {statementData.settlements.length === 0 && <p style={{ color: "#888" }}>No settlement attempts this period.</p>}
+    {statementData.settlements.map((s: any, i: number) => {
+      const label =
+        s.status === "both_confirmed" ? { text: "✓ Paid & confirmed", color: "#86efac" } :
+        s.status === "payer_confirmed" ? { text: "⏳ Awaiting confirmation", color: "#fbbf24" } :
+        s.status === "disputed" ? { text: "⚠ Disputed", color: "#f87171" } :
+        { text: "✗ Not yet paid", color: "#f87171" };
+      return (
+        <p key={i} style={{ margin: "4px 0" }}>
+          {s.fromName} → {s.toName}: ₹{(s.amountPaise / 100).toFixed(2)} —{" "}
+          <span style={{ color: label.color }}>{label.text}</span>
+        </p>
+      );
+    })}
+
+    <h4>Still pending</h4>
+    {statementData.stillOwing.length === 0 && <p style={{ color: "#86efac" }}>Everyone is settled up ✓</p>}
+    {statementData.stillOwing.map((p: any, i: number) => (
+      <p key={i} style={{ color: "#f87171", margin: "4px 0" }}>
+        {p.name}: ₹{(p.amountPaise / 100).toFixed(2)} still owed
+      </p>
+    ))}
+
+    <h4>Balances</h4>
+    {statementData.currentBalances.map((b: any, i: number) => (
+      <p key={i} style={{ color: b.amountPaise >= 0 ? "#86efac" : "#f87171" }}>
+        {b.name}: {b.amountPaise >= 0 ? "is owed" : "owes"} ₹{(Math.abs(b.amountPaise) / 100).toFixed(2)}
+      </p>
+    ))}
+  </div>
+)}
   </Dialog>
 )}
       {showAddMemberModal && (

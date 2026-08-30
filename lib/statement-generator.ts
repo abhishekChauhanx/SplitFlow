@@ -24,7 +24,6 @@ export async function generateGroupStatement(groupId: string, periodDays: number
 
   const totalSpent = expenses.reduce((sum, e) => sum + e.amountPaise, 0);
 
-  // Net balances over the whole period, not just this window — same logic as getRawBalances
   const allExpenses = await prisma.expense.findMany({
     where: { groupId },
     include: { splits: true },
@@ -36,6 +35,26 @@ export async function generateGroupStatement(groupId: string, periodDays: number
       net[s.userId] = (net[s.userId] || 0) - s.amountOwedPaise;
     }
   }
+
+  // NEW — every settlement in this period, tagged with names and clear status
+  const settlementsWithNames = settlements.map((s) => ({
+    fromName: userMap[s.fromUserId] || "Unknown",
+    toName: userMap[s.toUserId] || "Unknown",
+    amountPaise: s.amountPaise,
+    status: s.status, // "pending" | "payer_confirmed" | "both_confirmed" | "disputed"
+    paymentMethod: s.paymentMethod,
+    createdAt: s.createdAt,
+  }));
+
+  // NEW — from the simplified debt suggestions (who currently still needs to
+  // pay whom), cross-referenced against settlements already confirmed, so we
+  // can show a clean "still pending" list distinct from "already settled"
+  const stillOwing = Object.entries(net)
+    .filter(([, amountPaise]) => amountPaise < 0)
+    .map(([userId, amountPaise]) => ({
+      name: userMap[userId] || "Unknown",
+      amountPaise: Math.abs(amountPaise),
+    }));
 
   return {
     groupName: group.name,
@@ -52,9 +71,11 @@ export async function generateGroupStatement(groupId: string, periodDays: number
     })),
     settlementsInPeriod: settlements.length,
     settlementsConfirmed: settlements.filter((s) => s.status === "both_confirmed").length,
+    settlements: settlementsWithNames, // NEW
     currentBalances: Object.entries(net).map(([userId, amountPaise]) => ({
       name: userMap[userId] || "Unknown",
       amountPaise,
     })),
+    stillOwing, // NEW — quick "who still needs to pay" list
   };
 }
