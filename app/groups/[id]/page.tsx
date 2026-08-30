@@ -228,6 +228,11 @@ export default function GroupDetailPage() {
   const [disputes, setDisputes] = useState<any[]>([]);
   const [arbitratingId, setArbitratingId] = useState<string | null>(null);
 
+  const [showStatementModal, setShowStatementModal] = useState(false);
+  const [statementPeriod, setStatementPeriod] = useState(30);
+  const [statementData, setStatementData] = useState<any>(null);
+  const [loadingStatement, setLoadingStatement] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
   const loadDisputes = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/disputes`);
     if (res.ok) {
@@ -241,7 +246,65 @@ export default function GroupDetailPage() {
   useEffect(() => {
     loadDisputes();
   }, [loadDisputes]);
+async function openStatementModal() {
+  setLoadingStatement(true);
+  setShowStatementModal(true);
+  try {
+    const res = await fetch(`/api/groups/${id}/statement?days=${statementPeriod}`);
+    setStatementData(await res.json());
+  } finally {
+    setLoadingStatement(false);
+  }
+}
 
+async function emailStatement() {
+  setSendingEmail(true);
+  try {
+    const res = await fetch(`/api/groups/${id}/statement/email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ periodDays: statementPeriod }),
+    });
+
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      await confirm({ title: "Something went wrong", message: "Unexpected response from server.", mode: "alert" });
+      return;
+    }
+
+    if (!res.ok) {
+      await confirm({ title: "Couldn't send statement", message: data?.error || "Please try again.", mode: "alert" });
+      return;
+    }
+
+    await confirm({
+      title: "Statement sent",
+      message: `Emailed to ${data.sentTo} of ${data.totalMembers} members.`,
+      mode: "alert",
+    });
+  } finally {
+    setSendingEmail(false);
+  }
+}
+
+function shareViaWhatsApp() {
+  if (!statementData) return;
+  const rupees = (p: number) => (p / 100).toFixed(2);
+  const lines = [
+    `*${statementData.groupName} — ${statementData.periodDays}-day statement*`,
+    ``,
+    `Total spent: ₹${rupees(statementData.totalSpentPaise)} (${statementData.expenseCount} expenses)`,
+    ``,
+    `*Balances:*`,
+    ...statementData.currentBalances.map(
+      (b: any) => `${b.name}: ${b.amountPaise >= 0 ? "is owed" : "owes"} ₹${rupees(Math.abs(b.amountPaise))}`
+    ),
+  ];
+  const text = encodeURIComponent(lines.join("\n"));
+  window.open(`https://wa.me/?text=${text}`, "_blank");
+}
   // Rewritten: uses the modal's prompt() dialog instead of the native
   // window.prompt(). Sequencing: dialog opens first (no loader behind it,
   // since nothing is loading yet) -> user types a note and clicks OK ->
@@ -844,7 +907,7 @@ export default function GroupDetailPage() {
       <button onClick={() => setShowPlaceholderModal(true)}>Add placeholder member</button>
 
       <button onClick={openExpenseModal}>Add expense</button>
-
+<button onClick={openStatementModal}>📊 Generate statement</button>
       {summary && <GroupSummaryCards summary={summary} recurringTemplates={recurringTemplates} />}
 
       <h2>Expenses</h2>
@@ -935,7 +998,45 @@ export default function GroupDetailPage() {
           ))}
         </div>
       )}
+{showStatementModal && (
+  <Dialog
+    icon="📊"
+    iconColor="#2563eb"
+    title="Group statement"
+    onBackdropClick={() => setShowStatementModal(false)}
+    width={480}
+    footer={
+      <>
+        <DialogButton variant="secondary" onClick={() => setShowStatementModal(false)}>Close</DialogButton>
+        <DialogButton onClick={shareViaWhatsApp} disabled={!statementData}>📱 Share via WhatsApp</DialogButton>
+        <DialogButton onClick={emailStatement} disabled={!statementData || sendingEmail}>
+          {sendingEmail ? <Spinner /> : "📧 Email to all members"}
+        </DialogButton>
+      </>
+    }
+  >
+    <select value={statementPeriod} onChange={(e) => { setStatementPeriod(Number(e.target.value)); openStatementModal(); }}>
+      <option value={7}>Last 7 days</option>
+      <option value={30}>Last 30 days</option>
+      <option value={90}>Last 90 days</option>
+    </select>
 
+    {loadingStatement && <Spinner />}
+
+    {statementData && !loadingStatement && (
+      <div style={{ fontSize: 13 }}>
+        <p>Total spent: ₹{(statementData.totalSpentPaise / 100).toFixed(2)} ({statementData.expenseCount} expenses)</p>
+        <p>Settlements: {statementData.settlementsConfirmed}/{statementData.settlementsInPeriod} confirmed</p>
+        <h4>Balances</h4>
+        {statementData.currentBalances.map((b: any, i: number) => (
+          <p key={i} style={{ color: b.amountPaise >= 0 ? "#86efac" : "#f87171" }}>
+            {b.name}: {b.amountPaise >= 0 ? "is owed" : "owes"} ₹{(Math.abs(b.amountPaise) / 100).toFixed(2)}
+          </p>
+        ))}
+      </div>
+    )}
+  </Dialog>
+)}
       {showAddMemberModal && (
         <Dialog
           icon="＋"
