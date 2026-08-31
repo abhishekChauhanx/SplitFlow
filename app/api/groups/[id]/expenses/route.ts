@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
 import { splitEqual, splitExact, splitByPercentage, splitByShares } from "@/lib/split-logic";
 import { sendPushToGroup } from "@/lib/webpush";
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const expenses = await prisma.expense.findMany({
@@ -32,16 +33,28 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     percentages,
     shareUnits,
     confirmDuplicate,
-    confirmMerge, // NEW: set true once the user has confirmed the merge prompt
+    confirmMerge,
+    clientId, // NEW — idempotency key from offline queue / any client-side retry
   } = await req.json();
+
+  // ── NEW: idempotency check, runs before anything else ──
+  // If this exact client-generated request already succeeded (e.g. a retry
+  // after a dropped connection, or an offline-queued expense being synced),
+  // return the existing expense instead of creating — or merging — a duplicate.
+  if (clientId) {
+    const existing = await prisma.expense.findUnique({
+      where: { clientId },
+      include: { splits: true, payments: true },
+    });
+    if (existing) {
+      return NextResponse.json(existing);
+    }
+  }
 
   const trimmedDescription = (description || "").trim();
   const effectiveSplitType = splitType || "EQUAL";
 
   // ── Merge-by-description (Equal split only for now) ──
-  // If an Equal-split expense with the same description (case-insensitive)
-  // already exists in this group, offer to fold this contribution into it
-  // instead of creating a brand-new expense row.
   if (trimmedDescription && effectiveSplitType === "EQUAL") {
     const existing = await prisma.expense.findFirst({
       where: {
@@ -72,15 +85,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const memberIds = members.map((m) => m.userId);
 
       const updated = await prisma.$transaction(async (tx) => {
-        // Backfill a payment row for the original payer on legacy expenses
-        // that predate the ExpensePayment table, so their contribution isn't lost.
         if (existing.payments.length === 0) {
           await tx.expensePayment.create({
             data: { expenseId: existing.id, userId: existing.paidById, amountPaise: existing.amountPaise },
           });
         }
 
-        // Add (or increment) this contributor's payment row
         await tx.expensePayment.upsert({
           where: { expenseId_userId: { expenseId: existing.id, userId: paidById } },
           create: { expenseId: existing.id, userId: paidById, amountPaise },
@@ -88,7 +98,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         });
 
         const newTotal = existing.amountPaise + amountPaise;
-        // createdById never changes on merge — original creator stays "owner"
         const newSplits = splitEqual(newTotal, memberIds, existing.createdById);
 
         await tx.expenseSplit.deleteMany({ where: { expenseId: existing.id } });
@@ -97,7 +106,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           where: { id: existing.id },
           data: {
             amountPaise: newTotal,
-            paidById, // most recent contributor — shown as "last paid by" in the UI
+            paidById,
             splits: { create: newSplits },
           },
           include: { splits: true, payments: true, paidBy: true, createdBy: true },
@@ -108,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
   }
 
-  // ── Existing accidental-duplicate-submission protection (unchanged) ──
+  // ── Existing accidental-duplicate-submission protection ──
   if (!confirmDuplicate) {
     const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
     const possibleDuplicate = await prisma.expense.findFirst({
@@ -152,17 +161,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       description,
       amountPaise,
       paidById,
-      createdById: userId, // the person who added this expense — fixed forever, used for edit ownership
+      createdById: userId,
       splitType: splitType || "EQUAL",
+      clientId: clientId || null, // NEW
       splits: { create: splits },
       payments: { create: [{ userId: paidById, amountPaise }] },
     },
     include: { splits: true, payments: true },
   });
-await sendPushToGroup(id, userId, {
-  title: "New expense added",
-  body: `${expense.description} — ₹${(expense.amountPaise / 100).toFixed(2)}`,
-  url: `/groups/${id}`,
-}).catch(() => {}); 
+
+  await sendPushToGroup(id, userId, {
+    title: "New expense added",
+    body: `${expense.description} — ₹${(expense.amountPaise / 100).toFixed(2)}`,
+    url: `/groups/${id}`,
+  }).catch(() => {});
+
   return NextResponse.json(expense);
 }
