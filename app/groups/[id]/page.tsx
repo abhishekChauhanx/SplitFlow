@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
@@ -179,6 +179,7 @@ function DialogButton({
 }
 
 export default function GroupDetailPage() {
+  const router = useRouter()
   const { id } = useParams();
   const { confirm, prompt } = useModal(); // added `prompt` for the arbitration note dialog
   const [initialLoading, setInitialLoading] = useState(true);
@@ -236,6 +237,8 @@ export default function GroupDetailPage() {
   const [loadingStatement, setLoadingStatement] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
 
+  const [leavingGroup, setLeavingGroup] = useState(false);
+  const [archivingGroup, setArchivingGroup] = useState(false);
   const isOnline = useOnlineStatus();
 const [queuedCount, setQueuedCount] = useState(0);
 const [syncing, setSyncing] = useState(false);
@@ -283,6 +286,60 @@ useEffect(() => {
   useEffect(() => {
     loadDisputes();
   }, [loadDisputes]);
+
+  async function leaveGroup() {
+  const ok = await confirm({
+    title: "Leave this group?",
+    message: "You'll be removed from this group. You can only leave once your balance is fully settled.",
+    confirmLabel: "Leave group",
+  });
+  if (!ok) return;
+
+  setLeavingGroup(true);
+  try {
+    const res = await fetch(`/api/groups/${id}/leave`, { method: "POST" });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setLeavingGroup(false);
+      await confirm({
+        title: data.error === "balance_not_settled" ? "Settle up first" : "Couldn't leave",
+        message: data.message || data.error,
+        mode: "alert",
+      });
+      return;
+    }
+
+    router.push("/dashboard");
+  } finally {
+    setLeavingGroup(false);
+  }
+}
+
+async function toggleArchive() {
+  const currentlyArchived = groupInfo?.archived; // assumes you're storing the group's own archived flag somewhere in state — see note below
+  const ok = await confirm({
+    title: currentlyArchived ? "Unarchive this group?" : "Archive this group?",
+    message: currentlyArchived
+      ? "This group will reappear in the default dashboard view."
+      : "This group will be hidden from the default dashboard view, but all data stays intact.",
+    confirmLabel: currentlyArchived ? "Unarchive" : "Archive",
+  });
+  if (!ok) return;
+
+  setArchivingGroup(true);
+  try {
+    const res = await fetch(`/api/groups/${id}/archive`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      await confirm({ title: "Couldn't archive", message: data.error, mode: "alert" });
+      return;
+    }
+    router.push("/dashboard");
+  } finally {
+    setArchivingGroup(false);
+  }
+}
 async function openStatementModal() {
   setLoadingStatement(true);
   setShowStatementModal(true);
@@ -995,7 +1052,15 @@ function shareViaWhatsApp() {
           );
         })}
       </ul>
+<button onClick={leaveGroup} disabled={leavingGroup} style={{ fontSize: 13, color: "#f87171" }}>
+  {leavingGroup ? <Spinner /> : "Leave group"}
+</button>
 
+{isAdmin && (
+  <button onClick={toggleArchive} disabled={archivingGroup} style={{ fontSize: 13, color: "#888" }}>
+    {archivingGroup ? <Spinner /> : "Archive group"}
+  </button>
+)}
       <button onClick={() => setShowAddMemberModal(true)}>Add member</button>
 
       <button onClick={generateInvite} disabled={generatingInvite}>
