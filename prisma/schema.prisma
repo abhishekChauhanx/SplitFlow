@@ -73,6 +73,7 @@ model Expense {
   payments            ExpensePayment[] // NEW
   recurringTemplateId String?
   recurringTemplate   RecurringTemplate? @relation(fields: [recurringTemplateId], references: [id], onDelete: SetNull)
+  clientId            String?            @unique // idempotency key — prevents duplicate creation on retry/sync
 }
 
 model ExpensePayment {

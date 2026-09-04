@@ -12,7 +12,9 @@ import GroupExpensesGrid from "@/components/GroupExpensesGrid";
 import GroupRecurringGrid from "@/components/GroupRecurringGrid";
 import NotificationBell from "@/components/NotificationBell";
 import type { GroupSummary } from "@/lib/group-summary";
-
+import { useOnlineStatus } from "@/components/useOnlineStatus";
+import { enqueueExpense, generateClientId, getQueuedExpenses } from "@/lib/offline-queue";
+import { syncQueuedExpenses } from "@/lib/sync-queue";
 type RecurringTemplateRow = {
   id: string;
   description: string;
@@ -233,6 +235,10 @@ export default function GroupDetailPage() {
   const [statementData, setStatementData] = useState<any>(null);
   const [loadingStatement, setLoadingStatement] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  const isOnline = useOnlineStatus();
+const [queuedCount, setQueuedCount] = useState(0);
+const [syncing, setSyncing] = useState(false);
   const loadDisputes = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/disputes`);
     if (res.ok) {
@@ -242,7 +248,38 @@ export default function GroupDetailPage() {
       setIsAdmin(false);
     }
   }, [id]);
+const refreshQueueCount = useCallback(async () => {
+  const queued = await getQueuedExpenses();
+  setQueuedCount(queued.filter((q) => q.groupId === id).length);
+}, [id]);
 
+useEffect(() => {
+  refreshQueueCount();
+}, [refreshQueueCount]);
+
+useEffect(() => {
+  if (!isOnline || queuedCount === 0) return;
+  setSyncing(true);
+  syncQueuedExpenses((groupId, expense) => {
+    if (groupId === id) {
+      setExpenses((prev) => {
+        const filtered = prev.filter((e) => e.clientId !== expense.clientId);
+        return [expense, ...filtered];
+      });
+    }
+  }).then(async ({ synced, failed }) => {
+    setSyncing(false);
+    await refreshQueueCount();
+    if (synced > 0) loadSummary();
+    if (failed > 0) {
+      await confirm({
+        title: "Some expenses couldn't sync",
+        message: `${failed} queued expense(s) failed to sync — check they're valid and try again.`,
+        mode: "alert",
+      });
+    }
+  });
+}, [isOnline, queuedCount, id]);
   useEffect(() => {
     loadDisputes();
   }, [loadDisputes]);
@@ -365,17 +402,18 @@ function shareViaWhatsApp() {
   }, [id]);
 
   const loadPendingRequests = useCallback(() => {
-    return fetch(`/api/edit-permissions/pending?groupId=${id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setPendingRequests(data);
-      });
-  }, [id]);
+  return fetch(`/api/edit-permissions/pending?groupId=${id}`)
+    .then((r) => r.json())
+    .then((data) => {
+      if (Array.isArray(data)) setPendingRequests(data);
+    })
+    .catch(() => {}); // NEW — swallow network errors (e.g. offline) instead of crashing
+}, [id]);
 
   const loadMyPermissions = useCallback(() => {
     return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
-      .then((r) => r.json())
-      .then(async (data: any[]) => {
+    .then((r) => r.json())
+    .then(async (data: any[]) => {
         if (!Array.isArray(data)) return;
 
         const map: Record<string, string> = {};
@@ -412,7 +450,7 @@ function shareViaWhatsApp() {
 
         setMyPermissions(map);
         setPendingRequestIds(idMap);
-      });
+      }).catch(() => {});
   }, [confirm, id]);
 
   useEffect(() => {
@@ -427,19 +465,19 @@ function shareViaWhatsApp() {
     ]).finally(() => setInitialLoading(false));
 
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadPendingRequests();
-        loadMyPermissions();
-      }
-    }, 8000);
+  if (document.visibilityState === "visible" && navigator.onLine) { // NEW — added navigator.onLine check
+    loadPendingRequests();
+    loadMyPermissions();
+  }
+}, 8000);
 
     function handleFocusOrVisible() {
-      if (document.visibilityState === "visible") {
-        loadSummary();
-        loadExpenses();
-        loadRecurringTemplates();
-      }
-    }
+  if (document.visibilityState === "visible" && navigator.onLine) { // NEW
+    loadSummary();
+    loadExpenses();
+    loadRecurringTemplates();
+  }
+}
     window.addEventListener("focus", handleFocusOrVisible);
     document.addEventListener("visibilitychange", handleFocusOrVisible);
 
@@ -649,88 +687,139 @@ function shareViaWhatsApp() {
   }
 
   async function addExpense(confirmDuplicate = false, confirmMerge = false) {
-    if (!confirmDuplicate && !confirmMerge) {
-      if (!description.trim() || !amount) return;
-    }
+  if (!confirmDuplicate && !confirmMerge) {
+    if (!description.trim() || !amount) return;
+  }
 
-    setError(null);
-    setAddingExpense(true);
-    setAddingExpenseLabel(
-      confirmMerge ? `Merging "${description.trim()}"` : "Saving expense"
-    );
-    try {
-      const amountPaise = Math.round(parseFloat(amount) * 100);
+  setError(null);
 
-      const exactAmounts = expenseSplitType === "EXACT"
-        ? Object.fromEntries(Object.entries(exactInputs).map(([uid, v]) => [uid, Math.round(parseFloat(v) * 100)]))
-        : undefined;
+  const amountPaise = Math.round(parseFloat(amount) * 100);
 
-      const percentages = expenseSplitType === "PERCENTAGE"
-        ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
-        : undefined;
+  const exactAmounts = expenseSplitType === "EXACT"
+    ? Object.fromEntries(Object.entries(exactInputs).map(([uid, v]) => [uid, Math.round(parseFloat(v) * 100)]))
+    : undefined;
 
-      const shareUnits = expenseSplitType === "SHARES"
-        ? Object.fromEntries(
-          Object.entries(shareInputs)
-            .filter(([, v]) => v)
-            .map(([uid, v]) => [uid, parseInt(v)])
-        )
-        : undefined;
+  const percentages = expenseSplitType === "PERCENTAGE"
+    ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
+    : undefined;
 
-      const res = await fetch(`/api/groups/${id}/expenses`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate, confirmMerge }),
-      });
+  const shareUnits = expenseSplitType === "SHARES"
+    ? Object.fromEntries(
+      Object.entries(shareInputs)
+        .filter(([, v]) => v)
+        .map(([uid, v]) => [uid, parseInt(v)])
+    )
+    : undefined;
 
-      if (res.status === 409) {
-        const data = await res.json();
-        setAddingExpense(false);
+  const payload = { description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits };
 
-        if (data.mergeCandidate) {
-          const ok = await confirm({
-            title: "Merge expense?",
-            message: data.message,
-            confirmLabel: "Merge into existing",
-          });
-          if (ok) await addExpense(false, true);
-          return;
-        } else {
-          const ok = await confirm({
-            title: "Possible duplicate",
-            message: data.message,
-            confirmLabel: "Add anyway",
-          });
-          if (ok) await addExpense(true, false);
-          return;
-        }
-      }
-      if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Failed to add expense");
+  // ── NEW: offline path — queue locally, show an optimistic entry ──
+  if (!isOnline && !confirmDuplicate && !confirmMerge) {
+    const clientId = generateClientId();
+    await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
+
+    const payerName = members.find((m) => m.userId === paidById)?.user?.name || "Someone";
+    setExpenses((prev) => [
+      {
+        id: `pending-${clientId}`,
+        clientId,
+        description,
+        amountPaise,
+        paidById,
+        paidBy: { name: payerName },
+        splitType: expenseSplitType,
+        splits: [],
+        payments: [],
+        pendingSync: true,
+      },
+      ...prev,
+    ]);
+
+    setDescription("");
+    setAmount("");
+    setExactInputs({});
+    setPercentInputs({});
+    setShareInputs({});
+    setExpenseSplitType("EQUAL");
+    setShowExpenseModal(false);
+    await refreshQueueCount();
+    return;
+  }
+
+  setAddingExpense(true);
+  setAddingExpenseLabel(
+    confirmMerge ? `Merging "${description.trim()}"` : "Saving expense"
+  );
+  try {
+    const clientId = generateClientId(); // NEW — always attach, so a mid-request drop can be safely retried
+
+    const res = await fetch(`/api/groups/${id}/expenses`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate, confirmMerge, clientId }),
+    });
+
+    if (res.status === 409) {
+      const data = await res.json();
+      setAddingExpense(false);
+
+      if (data.mergeCandidate) {
+        const ok = await confirm({
+          title: "Merge expense?",
+          message: data.message,
+          confirmLabel: "Merge into existing",
+        });
+        if (ok) await addExpense(false, true);
+        return;
+      } else {
+        const ok = await confirm({
+          title: "Possible duplicate",
+          message: data.message,
+          confirmLabel: "Add anyway",
+        });
+        if (ok) await addExpense(true, false);
         return;
       }
-
-      const expense = await res.json();
-      setExpenses((prev) => {
-        const alreadyThere = prev.some((e) => e.id === expense.id);
-        return alreadyThere
-          ? prev.map((e) => (e.id === expense.id ? expense : e))
-          : [expense, ...prev];
-      });
-      setDescription("");
-      setAmount("");
-      setExactInputs({});
-      setPercentInputs({});
-      setShareInputs({});
-      setExpenseSplitType("EQUAL");
-      setShowExpenseModal(false);
-
-      loadSummary();
-    } finally {
-      setAddingExpense(false);
     }
+    if (!res.ok) {
+      const data = await res.json();
+      setError(data.error || "Failed to add expense");
+      return;
+    }
+
+    const expense = await res.json();
+    setExpenses((prev) => {
+      const alreadyThere = prev.some((e) => e.id === expense.id);
+      return alreadyThere
+        ? prev.map((e) => (e.id === expense.id ? expense : e))
+        : [expense, ...prev];
+    });
+    setDescription("");
+    setAmount("");
+    setExactInputs({});
+    setPercentInputs({});
+    setShareInputs({});
+    setExpenseSplitType("EQUAL");
+    setShowExpenseModal(false);
+
+    loadSummary();
+  } catch (networkErr) {
+    // NEW — genuine mid-request network failure: fall back to queuing
+    // instead of losing the user's input entirely.
+    setAddingExpense(false);
+    const clientId = generateClientId();
+    await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
+    await refreshQueueCount();
+    await confirm({
+      title: "Connection lost",
+      message: "Your expense has been saved and will sync automatically once you're back online.",
+      mode: "alert",
+    });
+    setShowExpenseModal(false);
+  } finally {
+    setAddingExpense(false);
   }
+}
 
   function openExpenseModal() {
     setError(null);
@@ -819,7 +908,16 @@ function shareViaWhatsApp() {
       <Link href="/dashboard" style={{ fontSize: 14, color: "#888" }}>
         ← Back to dashboard
       </Link>
-
+{!isOnline && (
+  <div style={{ padding: "8px 14px", background: "#451a03", border: "1px solid #92400e", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#fbbf24" }}>
+    📡 You're offline — new expenses will be saved locally and synced automatically once you're back online.
+  </div>
+)}
+{isOnline && queuedCount > 0 && (
+  <div style={{ padding: "8px 14px", background: "#172554", border: "1px solid #1e40af", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#93c5fd" }}>
+    {syncing ? "🔄 Syncing queued expenses..." : `🔄 ${queuedCount} queued expense(s) waiting to sync`}
+  </div>
+)}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ margin: 0 }}>Group</h1>
