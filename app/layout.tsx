@@ -4,6 +4,7 @@ import "./globals.css";
 import { ModalProvider } from "@/components/ModalProvider";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { AuthProvider } from "@/components/AuthProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -54,7 +55,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
         <ThemeProvider>
-          <ModalProvider>{children}</ModalProvider>
+          <AuthProvider>
+            <ModalProvider>{children}</ModalProvider>
+          </AuthProvider>
         </ThemeProvider>
         <ServiceWorkerRegistration />
       </body>

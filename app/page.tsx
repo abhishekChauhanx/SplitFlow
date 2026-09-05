@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
+import { useAuth } from "@/components/AuthProvider";
 import "./home.css";
 
 const FEATURES = [
@@ -56,21 +56,7 @@ const ACCENT_STYLES: Record<string, string> = {
 };
 
 export default function Home() {
-  const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
-
-  const loadMe = useCallback(async () => {
-    try {
-      const res = await fetch("/api/me");
-      if (res.ok) setMe(await res.json());
-    } finally {
-      setCheckingAuth(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadMe();
-  }, [loadMe]);
+  const { me, checkingAuth } = useAuth();
 
   return (
     <div className="flex min-h-screen flex-col bg-white font-sans text-zinc-900 antialiased transition-colors dark:bg-black dark:text-white">
