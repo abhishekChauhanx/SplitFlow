@@ -7,21 +7,10 @@ import "./home.css";
 
 const FEATURES = [
   {
-    title: "Create a group",
-    description: "Spin up a group for a trip, flat, or friend circle in seconds.",
+    title: "Split any way you like",
+    description:
+      "Equal, exact amounts, percentages, or usage-based shares — a restaurant bill and a mess bill don't split the same way.",
     accent: "indigo",
-    icon: (
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"
-      />
-    ),
-  },
-  {
-    title: "Add expenses",
-    description: "Split equally, by exact amount, percentage, or shares.",
-    accent: "sky",
     icon: (
       <path
         strokeLinecap="round"
@@ -31,9 +20,10 @@ const FEATURES = [
     ),
   },
   {
-    title: "Settle up",
-    description: "See who owes what at a glance, and settle with one tap.",
-    accent: "emerald",
+    title: "Settle with real UPI",
+    description:
+      "Every balance turns into a scannable QR code or a tap-to-pay link. No more \"I'll send it later.\"",
+    accent: "sky",
     icon: (
       <path
         strokeLinecap="round"
@@ -42,6 +32,64 @@ const FEATURES = [
       />
     ),
   },
+  {
+    title: "Two-sided confirmation",
+    description:
+      "Both sides confirm before it's marked settled — with UTR proof and dispute resolution built in.",
+    accent: "emerald",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 12.75l6 6 9-13.5"
+      />
+    ),
+  },
+  {
+    title: "Recurring bills, handled",
+    description:
+      "Rent, mess, tiffin — set it once. New roommates get included automatically, no manual re-splitting.",
+    accent: "indigo",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+      />
+    ),
+  },
+  {
+    title: "HRA-ready rent receipts",
+    description:
+      "Auto-generated the moment a rent payment is confirmed, digitally signed by your landlord.",
+    accent: "sky",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
+      />
+    ),
+  },
+  {
+    title: "Trust that travels with you",
+    description:
+      "A reliability score built from real payment history — on-time confirmations, dispute rate, proof provided.",
+    accent: "emerald",
+    icon: (
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+      />
+    ),
+  },
+];
+
+const STATS = [
+  { value: "4", label: "split methods" },
+  { value: "2-sided", label: "payment confirm" },
+  { value: "0", label: "manual reconciliation" },
 ];
 
 // Tailwind needs full, static class strings to detect them at build time —
@@ -81,19 +129,20 @@ export default function Home() {
         <div className="hero-glow" />
         <div className="hero-grid" />
 
-        <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-6 pb-28 pt-28 text-center sm:pt-36">
+        <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-6 pb-24 pt-28 text-center sm:pt-36">
           <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:shadow-none">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
-            Now with recurring expenses
+            Built for how money actually moves in India
           </span>
 
           <h1 className="text-gradient max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-6xl sm:leading-tight">
-            Split expenses with your groups, without the spreadsheet headache.
+            Split expenses. Settle with real UPI.
           </h1>
 
           <p className="mt-6 max-w-xl text-balance text-base leading-7 text-zinc-600 dark:text-zinc-400 sm:text-lg">
-            Create a group, add your friends, and keep track of who owes what
-            — all in one place.
+            Not another balance-tracker that ends in an awkward "did you pay
+            me yet?" text. SplitFlow turns every debt into a real, verifiable
+            UPI payment — with both sides confirming before it's done.
           </p>
 
           <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
@@ -107,30 +156,43 @@ export default function Home() {
             ) : (
               <>
                 <Link
-                  href="/signup"
+                  href="/login"
                   className="inline-flex h-12 items-center justify-center rounded-full bg-indigo-600 px-7 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 dark:bg-white dark:text-black dark:shadow-none dark:hover:bg-zinc-200"
                 >
                   Get started — it's free
                 </Link>
                 <Link
-                  href="/login"
+                  href="#features"
                   className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-300 px-7 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
                 >
-                  Log in
+                  See how it works
                 </Link>
               </>
             )}
           </div>
+
+          {/* Stats */}
+          <div className="mt-16 flex justify-center gap-10 sm:gap-16">
+            {STATS.map((s) => (
+              <div key={s.label} className="text-center">
+                <p className="text-2xl font-bold text-zinc-900 dark:text-white">{s.value}</p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">{s.label}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
-      {/* Feature strip */}
-      <section className="relative border-t border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-zinc-950">
-        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 px-6 py-20 sm:grid-cols-3">
+      {/* Feature grid */}
+      <section id="features" className="relative border-t border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-zinc-950">
+        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-6 px-6 py-20 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map((feature) => (
-            <div key={feature.title} className="flex flex-col items-start gap-4">
+            <div
+              key={feature.title}
+              className="group rounded-2xl border border-zinc-200 bg-white p-6 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-200/60 dark:border-white/10 dark:bg-zinc-900 dark:hover:shadow-black/40"
+            >
               <div
-                className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-sm dark:shadow-none ${ACCENT_STYLES[feature.accent]}`}
+                className={`mb-4 flex h-10 w-10 items-center justify-center rounded-full border shadow-sm dark:shadow-none ${ACCENT_STYLES[feature.accent]}`}
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -144,11 +206,48 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{feature.title}</h3>
-              <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{feature.description}</p>
+              <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{feature.description}</p>
             </div>
           ))}
         </div>
       </section>
+
+      {/* Secondary CTA band */}
+      <section className="border-t border-zinc-200 dark:border-white/10">
+        <div className="mx-auto max-w-5xl px-6 py-20">
+          <div className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-white p-10 text-center dark:border-white/10 dark:from-zinc-900 dark:to-black sm:p-14">
+            <h2 className="text-2xl font-bold text-zinc-900 dark:text-white sm:text-3xl">
+              One less awkward conversation per trip.
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-sm text-zinc-600 dark:text-zinc-400">
+              Groups, recurring rent, mess bills, farewell collections — all
+              in one place, all settled with real money moving.
+            </p>
+            {!checkingAuth && me ? (
+              <Link
+                href="/dashboard"
+                className="mt-8 inline-block rounded-full bg-zinc-900 px-7 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                Go to your dashboard
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="mt-8 inline-block rounded-full bg-zinc-900 px-7 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-zinc-700 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+              >
+                Create your first group
+              </Link>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-zinc-200 py-8 dark:border-white/10">
+        <p className="text-center text-xs text-zinc-500 dark:text-zinc-600">
+          SplitFlow — built for splitting bills and settling with real UPI.
+        </p>
+      </footer>
     </div>
   );
 }
