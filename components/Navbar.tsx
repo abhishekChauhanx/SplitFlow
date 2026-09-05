@@ -20,7 +20,18 @@ type PendingRequest = {
   expense: { description: string; amountPaise: number };
 };
 
-export default function Navbar() {
+export default function Navbar({
+  variant = "full",
+}: {
+  /** "full" (default): shows Log in/Sign up when logged out — used on Home,
+   *  marketing pages, etc. "minimal": hides those CTAs — used on auth pages
+   *  like /login and /signup, where "Log in" as a link back to itself (or
+   *  "Sign up" while signing in) would be redundant/confusing. Both variants
+   *  still show the theme toggle, and the bell/avatar if `me` resolves truthy
+   *  (e.g. someone already authenticated who lands back on /login briefly
+   *  before the redirect fires). */
+  variant?: "full" | "minimal";
+}) {
   const router = useRouter();
   const [me, setMe] = useState<Me>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
@@ -148,7 +159,7 @@ export default function Navbar() {
                 onLogout={handleLogout}
               />
             </>
-          ) : (
+          ) : variant === "full" ? (
             <>
               <ThemeToggle />
               <Link
@@ -164,6 +175,9 @@ export default function Navbar() {
                 Sign up
               </Link>
             </>
+          ) : (
+            // minimal: logged out, on an auth page — just the theme toggle
+            <ThemeToggle />
           )}
         </div>
       </div>
