@@ -9,6 +9,7 @@ const FEATURES = [
   {
     title: "Create a group",
     description: "Spin up a group for a trip, flat, or friend circle in seconds.",
+    accent: "indigo",
     icon: (
       <path
         strokeLinecap="round"
@@ -20,6 +21,7 @@ const FEATURES = [
   {
     title: "Add expenses",
     description: "Split equally, by exact amount, percentage, or shares.",
+    accent: "sky",
     icon: (
       <path
         strokeLinecap="round"
@@ -31,6 +33,7 @@ const FEATURES = [
   {
     title: "Settle up",
     description: "See who owes what at a glance, and settle with one tap.",
+    accent: "emerald",
     icon: (
       <path
         strokeLinecap="round"
@@ -40,6 +43,17 @@ const FEATURES = [
     ),
   },
 ];
+
+// Tailwind needs full, static class strings to detect them at build time —
+// `bg-${accent}-50` would silently produce nothing. Hence the explicit map.
+const ACCENT_STYLES: Record<string, string> = {
+  indigo:
+    "border-indigo-100 bg-indigo-50 text-indigo-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200",
+  sky:
+    "border-sky-100 bg-sky-50 text-sky-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200",
+  emerald:
+    "border-emerald-100 bg-emerald-50 text-emerald-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-200",
+};
 
 export default function Home() {
   const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
@@ -59,7 +73,7 @@ export default function Home() {
   }, [loadMe]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-black font-sans text-white antialiased">
+    <div className="flex min-h-screen flex-col bg-white font-sans text-zinc-900 antialiased transition-colors dark:bg-black dark:text-white">
       <Navbar />
 
       {/* Hero */}
@@ -68,8 +82,8 @@ export default function Home() {
         <div className="hero-grid" />
 
         <div className="relative mx-auto flex w-full max-w-5xl flex-col items-center px-6 pb-28 pt-28 text-center sm:pt-36">
-          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-zinc-300">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <span className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700 shadow-sm dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:shadow-none">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
             Now with recurring expenses
           </span>
 
@@ -77,7 +91,7 @@ export default function Home() {
             Split expenses with your groups, without the spreadsheet headache.
           </h1>
 
-          <p className="mt-6 max-w-xl text-balance text-base leading-7 text-zinc-400 sm:text-lg">
+          <p className="mt-6 max-w-xl text-balance text-base leading-7 text-zinc-600 dark:text-zinc-400 sm:text-lg">
             Create a group, add your friends, and keep track of who owes what
             — all in one place.
           </p>
@@ -86,7 +100,7 @@ export default function Home() {
             {!checkingAuth && me ? (
               <Link
                 href="/dashboard"
-                className="inline-flex h-12 items-center justify-center rounded-full bg-white px-7 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
+                className="inline-flex h-12 items-center justify-center rounded-full bg-indigo-600 px-7 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 dark:bg-white dark:text-black dark:shadow-none dark:hover:bg-zinc-200"
               >
                 Go to your dashboard
               </Link>
@@ -94,13 +108,13 @@ export default function Home() {
               <>
                 <Link
                   href="/signup"
-                  className="inline-flex h-12 items-center justify-center rounded-full bg-white px-7 text-sm font-semibold text-black transition-colors hover:bg-zinc-200"
+                  className="inline-flex h-12 items-center justify-center rounded-full bg-indigo-600 px-7 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 dark:bg-white dark:text-black dark:shadow-none dark:hover:bg-zinc-200"
                 >
                   Get started — it's free
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex h-12 items-center justify-center rounded-full border border-white/15 px-7 text-sm font-semibold text-white transition-colors hover:bg-white/5"
+                  className="inline-flex h-12 items-center justify-center rounded-full border border-zinc-300 px-7 text-sm font-semibold text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
                 >
                   Log in
                 </Link>
@@ -111,11 +125,13 @@ export default function Home() {
       </section>
 
       {/* Feature strip */}
-      <section className="relative border-t border-white/10 bg-zinc-950">
+      <section className="relative border-t border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-zinc-950">
         <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-8 px-6 py-20 sm:grid-cols-3">
           {FEATURES.map((feature) => (
             <div key={feature.title} className="flex flex-col items-start gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/5 text-zinc-200">
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-full border shadow-sm dark:shadow-none ${ACCENT_STYLES[feature.accent]}`}
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   fill="none"
@@ -127,8 +143,8 @@ export default function Home() {
                   {feature.icon}
                 </svg>
               </div>
-              <h3 className="text-sm font-semibold text-white">{feature.title}</h3>
-              <p className="text-sm leading-6 text-zinc-400">{feature.description}</p>
+              <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{feature.title}</h3>
+              <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-400">{feature.description}</p>
             </div>
           ))}
         </div>

@@ -26,23 +26,11 @@ export default function NotificationBell<T>({
   }, []);
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Notifications"
-        style={{
-          position: "relative",
-          width: 36,
-          height: 36,
-          borderRadius: "50%",
-          background: "transparent",
-          border: "1px solid #333",
-          color: "#ccc",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        className="relative flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300 bg-transparent text-zinc-600 transition-colors hover:bg-zinc-100 dark:border-[#333] dark:text-[#ccc] dark:hover:bg-white/5"
       >
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -50,56 +38,28 @@ export default function NotificationBell<T>({
         </svg>
 
         {count > 0 && (
-          <span
-            style={{
-              position: "absolute",
-              top: -2,
-              right: -2,
-              minWidth: 16,
-              height: 16,
-              padding: "0 3px",
-              borderRadius: 8,
-              background: "#dc2626",
-              color: "#fff",
-              fontSize: 10,
-              fontWeight: 700,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
+          <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-[3px] text-[10px] font-bold text-white">
             {count > 9 ? "9+" : count}
           </span>
         )}
       </button>
 
       {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: 44,
-            right: 0,
-            width: 340,
-            maxHeight: 400,
-            overflowY: "auto",
-            background: "#161616",
-            border: "1px solid #2a2a2a",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-            zIndex: 500,
-          }}
-        >
-          <div style={{ padding: "10px 14px", borderBottom: "1px solid #2a2a2a" }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#eee" }}>
+        <div className="absolute right-0 top-11 z-[500] max-h-[400px] w-[340px] overflow-y-auto rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-[#2a2a2a] dark:bg-[#161616]">
+          <div className="border-b border-zinc-200 px-3.5 py-2.5 dark:border-[#2a2a2a]">
+            <p className="m-0 text-[13px] font-semibold text-zinc-800 dark:text-[#eee]">
               Notifications {count > 0 && `(${count})`}
             </p>
           </div>
 
           {count === 0 ? (
-            <p style={{ padding: 14, margin: 0, fontSize: 13, color: "#888" }}>{emptyMessage}</p>
+            <p className="m-0 p-3.5 text-[13px] text-zinc-500 dark:text-[#888]">{emptyMessage}</p>
           ) : (
             items.map((item) => (
-              <div key={getKey(item)} style={{ padding: "10px 14px", borderBottom: "1px solid #222" }}>
+              <div
+                key={getKey(item)}
+                className="border-b border-zinc-100 px-3.5 py-2.5 last:border-b-0 dark:border-[#222]"
+              >
                 {renderItem(item)}
               </div>
             ))

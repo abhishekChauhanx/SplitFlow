@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import UserAvatarMenu from "@/components/UserAvatarMenu";
 import NotificationBell from "@/components/NotificationBell";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type Me = { name?: string; email?: string } | null;
 
@@ -89,36 +90,38 @@ export default function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-black/70 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full border-b border-zinc-200 bg-white/70 backdrop-blur-md dark:border-white/10 dark:bg-black/70">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6 sm:px-8">
         {/* Logo / brand */}
         <Link
           href="/"
-          className="text-lg font-semibold tracking-tight text-white"
+          className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-white"
         >
-          SplitFlow
+          YourApp
         </Link>
 
         {/* Right side */}
         <div className="flex items-center gap-3">
           {checkingAuth ? (
             // Reserve space so the navbar doesn't jump once auth resolves
-            <div className="h-9 w-24 animate-pulse rounded-full bg-white/10" />
+            <div className="h-9 w-24 animate-pulse rounded-full bg-zinc-200 dark:bg-white/10" />
           ) : me ? (
             <>
+              <ThemeToggle />
               <NotificationBell<PendingRequest>
                 items={pendingRequests}
                 getKey={(req) => req.id}
                 renderItem={(req) => (
                   <>
-                    <p className="mb-2 text-[13px] leading-snug text-zinc-300">
-                      <span className="font-semibold text-white">
+                    <p className="mb-2 text-[13px] leading-snug text-zinc-600 dark:text-zinc-300">
+                      <span className="font-semibold text-zinc-900 dark:text-white">
                         {req.requestedBy.name || req.requestedBy.email}
                       </span>{" "}
-                      wants to <span className="font-semibold text-white">{req.action}</span> "
+                      wants to{" "}
+                      <span className="font-semibold text-zinc-900 dark:text-white">{req.action}</span> "
                       {req.expense.description}" — ₹{(req.expense.amountPaise / 100).toFixed(2)}
                       {req.groupName ? (
-                        <span className="text-zinc-500"> in {req.groupName}</span>
+                        <span className="text-zinc-500 dark:text-zinc-500"> in {req.groupName}</span>
                       ) : null}
                     </p>
                     <div className="flex gap-2">
@@ -147,15 +150,16 @@ export default function Navbar() {
             </>
           ) : (
             <>
+              <ThemeToggle />
               <Link
                 href="/login"
-                className="flex h-9 items-center justify-center rounded-full border border-white/15 px-4 text-sm font-medium text-white transition-colors hover:bg-white/5"
+                className="flex h-9 items-center justify-center rounded-full border border-zinc-300 px-4 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-white/15 dark:text-white dark:hover:bg-white/5"
               >
                 Log in
               </Link>
               <Link
                 href="/signup"
-                className="flex h-9 items-center justify-center rounded-full bg-white px-4 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+                className="flex h-9 items-center justify-center rounded-full bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-700 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
               >
                 Sign up
               </Link>

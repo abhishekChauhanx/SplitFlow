@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/*
+  Tailwind v4 resolves `dark:` from CSS, not the JS config — darkMode:
+  "class" in tailwind.config.ts has no effect on its own. This line makes
+  `dark:*` utilities apply whenever an ancestor has the .dark class
+  (which ThemeProvider + the layout's init script toggle on <html>),
+  instead of v4's default of always following the OS media query.
+*/
+@custom-variant dark (&:is(.dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,11 +21,17 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/*
+  Switched from `@media (prefers-color-scheme: dark)` to `.dark`.
+  The media query only ever reflected the OS setting, so a manual
+  light/dark pick from ThemeToggle wouldn't actually change these
+  variables. The .dark class is kept in sync with the resolved theme
+  (system or manual) by ThemeProvider, so this now follows the same
+  source of truth as every dark: utility class in the app.
+*/
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {
