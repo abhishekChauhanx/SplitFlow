@@ -242,6 +242,7 @@ export default function GroupDetailPage() {
   const isOnline = useOnlineStatus();
 const [queuedCount, setQueuedCount] = useState(0);
 const [syncing, setSyncing] = useState(false);
+const [groupInfo, setGroupInfo] = useState<any>(null);
   const loadDisputes = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/disputes`);
     if (res.ok) {
@@ -436,12 +437,13 @@ function shareViaWhatsApp() {
   }
 
   const loadGroup = useCallback(async () => {
-    const res = await fetch(`/api/groups/${id}`);
-    const group = await res.json();
-    if (!group || !group.members) return;
-    setMembers(group.members);
-    if (group.members.length > 0) setPaidById(group.members[0].userId);
-  }, [id]);
+  const res = await fetch(`/api/groups/${id}`);
+  const group = await res.json();
+  if (!group || !group.members) return;
+  setGroupInfo(group); // NEW — store the group record itself (includes `archived`)
+  setMembers(group.members);
+  if (group.members.length > 0) setPaidById(group.members[0].userId);
+}, [id]);
 
   const loadExpenses = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/expenses`);
@@ -976,38 +978,53 @@ function shareViaWhatsApp() {
   </div>
 )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h1 style={{ margin: 0 }}>Group</h1>
-          <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
-        </div>
-        <NotificationBell<PendingRequest>
-          items={pendingRequests}
-          getKey={(req) => req.id}
-          renderItem={(req) => (
-            <>
-              <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
-                <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
-                <strong>{req.action}</strong> "{req.expense.description}" — ₹
-                {(req.expense.amountPaise / 100).toFixed(2)}
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => respondToRequest(req.id, "approved")}
-                  style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-                >
-                  ✓ Approve
-                </button>
-                <button
-                  onClick={() => respondToRequest(req.id, "denied")}
-                  style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-                >
-                  ✗ Deny
-                </button>
-              </div>
-            </>
-          )}
-        />
-      </div>
+  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+    <h1 style={{ margin: 0 }}>Group</h1>
+    <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
+    {groupInfo?.archived && (
+      <span style={{ fontSize: 10, background: "#333", color: "#999", padding: "2px 6px", borderRadius: 4 }}>
+        Archived
+      </span>
+    )}
+  </div>
+  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <button onClick={leaveGroup} disabled={leavingGroup} style={{ fontSize: 13, color: "#f87171", background: "none", border: "1px solid #7f1d1d", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
+      {leavingGroup ? <Spinner /> : "Leave group"}
+    </button>
+    {isAdmin && (
+      <button onClick={toggleArchive} disabled={archivingGroup} style={{ fontSize: 13, color: "#888", background: "none", border: "1px solid #444", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
+        {archivingGroup ? <Spinner /> : groupInfo?.archived ? "Unarchive group" : "Archive group"}
+      </button>
+    )}
+    <NotificationBell<PendingRequest>
+      items={pendingRequests}
+      getKey={(req) => req.id}
+      renderItem={(req) => (
+        <>
+          <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
+            <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
+            <strong>{req.action}</strong> "{req.expense.description}" — ₹
+            {(req.expense.amountPaise / 100).toFixed(2)}
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              onClick={() => respondToRequest(req.id, "approved")}
+              style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+            >
+              ✓ Approve
+            </button>
+            <button
+              onClick={() => respondToRequest(req.id, "denied")}
+              style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+            >
+              ✗ Deny
+            </button>
+          </div>
+        </>
+      )}
+    />
+  </div>
+</div>
 
       <Link href={`/groups/${id}/balances`}>View balances</Link>
       {" | "}
@@ -1052,15 +1069,7 @@ function shareViaWhatsApp() {
           );
         })}
       </ul>
-<button onClick={leaveGroup} disabled={leavingGroup} style={{ fontSize: 13, color: "#f87171" }}>
-  {leavingGroup ? <Spinner /> : "Leave group"}
-</button>
 
-{isAdmin && (
-  <button onClick={toggleArchive} disabled={archivingGroup} style={{ fontSize: 13, color: "#888" }}>
-    {archivingGroup ? <Spinner /> : "Archive group"}
-  </button>
-)}
       <button onClick={() => setShowAddMemberModal(true)}>Add member</button>
 
       <button onClick={generateInvite} disabled={generatingInvite}>
