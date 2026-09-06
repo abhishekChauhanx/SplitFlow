@@ -6,11 +6,8 @@ import { useRouter } from "next/navigation";
 import UserAvatarMenu from "@/components/UserAvatarMenu";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
+import { useAuth } from "@/components/AuthProvider";
 
-type Me = { name?: string; email?: string } | null;
-
-// Same shape as the per-group PendingRequest type on the group page, minus
-// the implicit groupId scoping (this is an aggregate across all groups).
 type PendingRequest = {
   id: string;
   action: string;
@@ -20,27 +17,22 @@ type PendingRequest = {
   expense: { description: string; amountPaise: number };
 };
 
-export default function Navbar() {
+export default function Navbar({
+  variant = "full",
+}: {
+  /** "full" (default): shows Log in/Sign up when logged out — used on Home,
+   *  marketing pages, etc. "minimal": hides those CTAs — used on auth pages
+   *  like /login and /signup, where "Log in" as a link back to itself (or
+   *  "Sign up" while signing in) would be redundant/confusing. Both variants
+   *  still show the theme toggle, and the bell/avatar if `me` resolves truthy
+   *  (e.g. someone already authenticated who lands back on /login briefly
+   *  before the redirect fires). */
+  variant?: "full" | "minimal";
+}) {
   const router = useRouter();
-  const [me, setMe] = useState<Me>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const { me, checkingAuth, clearMe } = useAuth();
   const [showInfoOverlay, setShowInfoOverlay] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
-
-  const loadMe = useCallback(async () => {
-    try {
-      const res = await fetch("/api/me");
-      if (res.ok) {
-        setMe(await res.json());
-      } else {
-        setMe(null);
-      }
-    } catch {
-      setMe(null);
-    } finally {
-      setCheckingAuth(false);
-    }
-  }, []);
 
   // NOTE: the group page calls `/api/edit-permissions/pending?groupId=...`,
   // scoped to one group. On Home there's no group in context, so this needs
@@ -69,10 +61,6 @@ export default function Navbar() {
   );
 
   useEffect(() => {
-    loadMe();
-  }, [loadMe]);
-
-  useEffect(() => {
     if (!me) return;
     loadPendingRequests();
     const interval = setInterval(() => {
@@ -85,7 +73,7 @@ export default function Navbar() {
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
-    setMe(null);
+    clearMe();
     router.push("/login");
   }
 
@@ -148,7 +136,7 @@ export default function Navbar() {
                 onLogout={handleLogout}
               />
             </>
-          ) : (
+          ) : variant === "full" ? (
             <>
               <ThemeToggle />
               <Link
@@ -164,6 +152,9 @@ export default function Navbar() {
                 Sign up
               </Link>
             </>
+          ) : (
+            // minimal: logged out, on an auth page — just the theme toggle
+            <ThemeToggle />
           )}
         </div>
       </div>
