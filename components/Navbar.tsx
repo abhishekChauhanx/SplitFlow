@@ -97,7 +97,7 @@ export default function Navbar() {
           href="/"
           className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-white"
         >
-          YourApp
+          SplitFlow
         </Link>
 
         {/* Right side */}
