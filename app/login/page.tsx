@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 import Navbar from "@/components/Navbar";
 import "../home.css"; // reuses hero-glow / hero-grid / text-gradient from the homepage
