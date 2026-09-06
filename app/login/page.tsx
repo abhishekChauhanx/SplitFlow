@@ -177,7 +177,7 @@ export default function LoginPage() {
                     className="h-11 w-full rounded-lg border border-zinc-300 bg-white px-3.5 text-sm text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-white/10 dark:bg-white/5 dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-indigo-400 dark:focus:ring-indigo-400/20"
                   />
                   <button
-                    onClick={handleSendOtp}
+                    onClick={handleSendOtp} 
                     disabled={loading || !email}
                     className="flex h-11 w-full items-center justify-center rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20 transition hover:shadow-indigo-500/35 disabled:cursor-not-allowed disabled:opacity-50 dark:from-white dark:to-white dark:text-black dark:shadow-none"
                   >
