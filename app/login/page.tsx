@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import SFLoaderOverlay from "@/components/SFLoaderOverlay";
 import Navbar from "@/components/Navbar";
+import "../home.css"; // reuses hero-glow / hero-grid / text-gradient from the homepage
 
 export default function LoginPage() {
   const router = useRouter();
@@ -43,7 +43,7 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/verify-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, otp, from }), // pass from
+        body: JSON.stringify({ email, otp, from }),
       });
       if (!res.ok) throw new Error();
       const data = await res.json();
@@ -60,21 +60,30 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-zinc-900 antialiased transition-colors dark:bg-black dark:text-white">
+    <div className="relative flex min-h-screen flex-col overflow-hidden bg-white text-zinc-900 antialiased transition-colors dark:bg-black dark:text-white">
+      {/* Same background treatment as the homepage, so this doesn't feel
+          like a bolted-on separate page. */}
+      <div className="hero-glow" />
+      <div className="hero-grid" />
+
       <SFLoaderOverlay
         visible={loading}
         label={step === "email" ? "Sending code" : "Verifying code"}
       />
 
-      {/* Reuses the same Navbar as every other page — "minimal" just hides
-          the Log in/Sign up CTAs, which would be redundant here. Theme
-          toggle, and bell/avatar if already authenticated, still show. */}
       <Navbar variant="minimal" />
 
-      <main className="flex flex-1 items-center justify-center px-4 py-16">
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-16">
         <div className="w-full max-w-sm">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none">
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-white">
+          {/* Brand mark above the card, echoes the homepage nav logo */}
+          <div className="mb-6 flex justify-center">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-sky-400 text-sm font-bold text-white shadow-sm">
+              SF
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-white/80 p-8 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/[0.03] dark:shadow-none">
+            <h1 className="text-gradient text-xl font-semibold tracking-tight">
               {step === "email" ? "Sign in" : "Check your email"}
             </h1>
             <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
@@ -102,7 +111,7 @@ export default function LoginPage() {
                   <button
                     onClick={handleSendOtp}
                     disabled={loading || !email}
-                    className="flex h-11 w-full items-center justify-center rounded-lg bg-indigo-600 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                    className="flex h-11 w-full items-center justify-center rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20 transition hover:shadow-indigo-500/35 disabled:cursor-not-allowed disabled:opacity-50 dark:from-white dark:to-white dark:text-black dark:shadow-none"
                   >
                     {loading ? "Sending…" : "Send code"}
                   </button>
@@ -129,7 +138,7 @@ export default function LoginPage() {
                   <button
                     onClick={handleVerifyOtp}
                     disabled={loading || !otp}
-                    className="flex h-11 w-full items-center justify-center rounded-lg bg-indigo-600 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200"
+                    className="flex h-11 w-full items-center justify-center rounded-lg bg-gradient-to-r from-indigo-600 to-sky-500 text-sm font-semibold text-white shadow-sm shadow-indigo-500/20 transition hover:shadow-indigo-500/35 disabled:cursor-not-allowed disabled:opacity-50 dark:from-white dark:to-white dark:text-black dark:shadow-none"
                   >
                     {loading ? "Verifying…" : "Verify"}
                   </button>
@@ -156,11 +165,12 @@ export default function LoginPage() {
             </div>
           </div>
 
+          {/* Fixed: there's no separate /signup route — the same email OTP
+              flow above creates a brand-new account automatically the first
+              time someone signs in. This line now just clarifies that,
+              instead of linking to a page that doesn't exist. */}
           <p className="mt-6 text-center text-sm text-zinc-500 dark:text-zinc-400">
-            New here?{" "}
-            <Link href="/signup" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-white dark:hover:text-zinc-300">
-              Create an account
-            </Link>
+            New here? Just enter your email above — your account is created automatically.
           </p>
         </div>
       </main>
