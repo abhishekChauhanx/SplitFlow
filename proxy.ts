@@ -40,6 +40,7 @@ export async function proxy(req: NextRequest) {
   }
 
   const isPublic =
+    pathname === "/" ||
     pathname === "/login" ||
     pathname === "/account-deleted" ||
     pathname.startsWith("/join/") ;
