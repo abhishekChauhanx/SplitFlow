@@ -2,20 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
-  const { searchParams } = new URL(req.url);
-  const includeArchived = searchParams.get("includeArchived") === "true";
-
   const groups = await prisma.group.findMany({
-    where: {
-      members: { some: { userId } },
-      ...(includeArchived ? {} : { archived: false }),
-    },
+    where: { members: { some: { userId } } },
     include: { members: { include: { user: true } } },
-    orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(groups);
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
@@ -179,7 +179,6 @@ function DialogButton({
 }
 
 export default function GroupDetailPage() {
-  const router = useRouter()
   const { id } = useParams();
   const { confirm, prompt } = useModal(); // added `prompt` for the arbitration note dialog
   const [initialLoading, setInitialLoading] = useState(true);
@@ -237,12 +236,9 @@ export default function GroupDetailPage() {
   const [loadingStatement, setLoadingStatement] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
 
-  const [leavingGroup, setLeavingGroup] = useState(false);
-  const [archivingGroup, setArchivingGroup] = useState(false);
   const isOnline = useOnlineStatus();
 const [queuedCount, setQueuedCount] = useState(0);
 const [syncing, setSyncing] = useState(false);
-const [groupInfo, setGroupInfo] = useState<any>(null);
   const loadDisputes = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/disputes`);
     if (res.ok) {
@@ -287,60 +283,6 @@ useEffect(() => {
   useEffect(() => {
     loadDisputes();
   }, [loadDisputes]);
-
-  async function leaveGroup() {
-  const ok = await confirm({
-    title: "Leave this group?",
-    message: "You'll be removed from this group. You can only leave once your balance is fully settled.",
-    confirmLabel: "Leave group",
-  });
-  if (!ok) return;
-
-  setLeavingGroup(true);
-  try {
-    const res = await fetch(`/api/groups/${id}/leave`, { method: "POST" });
-    const data = await res.json();
-
-    if (!res.ok) {
-      setLeavingGroup(false);
-      await confirm({
-        title: data.error === "balance_not_settled" ? "Settle up first" : "Couldn't leave",
-        message: data.message || data.error,
-        mode: "alert",
-      });
-      return;
-    }
-
-    router.push("/dashboard");
-  } finally {
-    setLeavingGroup(false);
-  }
-}
-
-async function toggleArchive() {
-  const currentlyArchived = groupInfo?.archived; // assumes you're storing the group's own archived flag somewhere in state — see note below
-  const ok = await confirm({
-    title: currentlyArchived ? "Unarchive this group?" : "Archive this group?",
-    message: currentlyArchived
-      ? "This group will reappear in the default dashboard view."
-      : "This group will be hidden from the default dashboard view, but all data stays intact.",
-    confirmLabel: currentlyArchived ? "Unarchive" : "Archive",
-  });
-  if (!ok) return;
-
-  setArchivingGroup(true);
-  try {
-    const res = await fetch(`/api/groups/${id}/archive`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok) {
-      await confirm({ title: "Couldn't archive", message: data.error, mode: "alert" });
-      return;
-    }
-    router.push("/dashboard");
-  } finally {
-    setArchivingGroup(false);
-  }
-}
 async function openStatementModal() {
   setLoadingStatement(true);
   setShowStatementModal(true);
@@ -437,13 +379,12 @@ function shareViaWhatsApp() {
   }
 
   const loadGroup = useCallback(async () => {
-  const res = await fetch(`/api/groups/${id}`);
-  const group = await res.json();
-  if (!group || !group.members) return;
-  setGroupInfo(group); // NEW — store the group record itself (includes `archived`)
-  setMembers(group.members);
-  if (group.members.length > 0) setPaidById(group.members[0].userId);
-}, [id]);
+    const res = await fetch(`/api/groups/${id}`);
+    const group = await res.json();
+    if (!group || !group.members) return;
+    setMembers(group.members);
+    if (group.members.length > 0) setPaidById(group.members[0].userId);
+  }, [id]);
 
   const loadExpenses = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/expenses`);
@@ -978,53 +919,38 @@ function shareViaWhatsApp() {
   </div>
 )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-    <h1 style={{ margin: 0 }}>Group</h1>
-    <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
-    {groupInfo?.archived && (
-      <span style={{ fontSize: 10, background: "#333", color: "#999", padding: "2px 6px", borderRadius: 4 }}>
-        Archived
-      </span>
-    )}
-  </div>
-  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-    <button onClick={leaveGroup} disabled={leavingGroup} style={{ fontSize: 13, color: "#f87171", background: "none", border: "1px solid #7f1d1d", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
-      {leavingGroup ? <Spinner /> : "Leave group"}
-    </button>
-    {isAdmin && (
-      <button onClick={toggleArchive} disabled={archivingGroup} style={{ fontSize: 13, color: "#888", background: "none", border: "1px solid #444", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
-        {archivingGroup ? <Spinner /> : groupInfo?.archived ? "Unarchive group" : "Archive group"}
-      </button>
-    )}
-    <NotificationBell<PendingRequest>
-      items={pendingRequests}
-      getKey={(req) => req.id}
-      renderItem={(req) => (
-        <>
-          <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
-            <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
-            <strong>{req.action}</strong> "{req.expense.description}" — ₹
-            {(req.expense.amountPaise / 100).toFixed(2)}
-          </p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              onClick={() => respondToRequest(req.id, "approved")}
-              style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-            >
-              ✓ Approve
-            </button>
-            <button
-              onClick={() => respondToRequest(req.id, "denied")}
-              style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-            >
-              ✗ Deny
-            </button>
-          </div>
-        </>
-      )}
-    />
-  </div>
-</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h1 style={{ margin: 0 }}>Group</h1>
+          <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
+        </div>
+        <NotificationBell<PendingRequest>
+          items={pendingRequests}
+          getKey={(req) => req.id}
+          renderItem={(req) => (
+            <>
+              <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
+                <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
+                <strong>{req.action}</strong> "{req.expense.description}" — ₹
+                {(req.expense.amountPaise / 100).toFixed(2)}
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  onClick={() => respondToRequest(req.id, "approved")}
+                  style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  onClick={() => respondToRequest(req.id, "denied")}
+                  style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
+                >
+                  ✗ Deny
+                </button>
+              </div>
+            </>
+          )}
+        />
+      </div>
 
       <Link href={`/groups/${id}/balances`}>View balances</Link>
       {" | "}

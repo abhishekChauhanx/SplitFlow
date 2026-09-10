@@ -50,13 +50,11 @@ model Group {
   id          String        @id @default(cuid())
   name        String
   groupType   String        @default("trip")
-  archived    Boolean       @default(false)
-  archivedAt  DateTime?
   createdAt   DateTime      @default(now())
   members     GroupMember[]
   expenses    Expense[]
   invites     GroupInvite[]
-  settlements Settlement[]
+  settlements Settlement[]   // NEW — back-relation for Settlement.group
 }
 model Expense {
   id                  String             @id @default(cuid())

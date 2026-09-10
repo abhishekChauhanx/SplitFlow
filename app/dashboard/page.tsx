@@ -23,17 +23,12 @@ export default function DashboardPage() {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [showInfoOverlay, setShowInfoOverlay] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
 
   const loadGroups = useCallback(async () => {
-  const res = await fetch(`/api/groups?includeArchived=${showArchived}`);
-  const data = await res.json();
-  setGroups(data);
-}, [showArchived]);
-
-useEffect(() => {
-  loadGroups();
-}, [loadGroups]);
+    const res = await fetch("/api/groups");
+    const data = await res.json();
+    setGroups(data);
+  }, []);
 
   const loadSummary = useCallback(async () => {
     const res = await fetch("/api/dashboard/groups-summary");
@@ -138,30 +133,14 @@ useEffect(() => {
           {creatingGroup ? <Spinner /> : "Create"}
         </button>
       </div>
-<div style={{ display: "flex", alignItems: "center", gap: 6, margin: "16px 0" }}>
-  <input
-    type="checkbox"
-    checked={showArchived}
-    onChange={(e) => setShowArchived(e.target.checked)}
-    id="show-archived"
-  />
-  <label htmlFor="show-archived" style={{ fontSize: 13, color: "#888" }}>
-    Show archived groups
-  </label>
-</div>
 
       <ul>
-  {groups.map((g) => (
-    <li key={g.id} style={{ opacity: g.archived ? 0.5 : 1 }}>
-      <Link href={`/groups/${g.id}`}>{g.name}</Link>
-      {g.archived && (
-        <span style={{ fontSize: 10, background: "#333", color: "#999", padding: "2px 6px", borderRadius: 4, marginLeft: 6 }}>
-          Archived
-        </span>
-      )}
-    </li>
-  ))}
-</ul>
+        {groups.map((g) => (
+          <li key={g.id}>
+            <Link href={`/groups/${g.id}`}>{g.name}</Link>
+          </li>
+        ))}
+      </ul>
 
       {showInfoOverlay && (
         <TableOverlay title="Your groups summary" onClose={() => setShowInfoOverlay(false)}>
