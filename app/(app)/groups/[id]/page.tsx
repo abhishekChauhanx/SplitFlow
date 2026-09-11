@@ -15,6 +15,8 @@ import type { GroupSummary } from "@/lib/group-summary";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { enqueueExpense, generateClientId, getQueuedExpenses } from "@/lib/offline-queue";
 import { syncQueuedExpenses } from "@/lib/sync-queue";
+import { useAppShell } from "@/components/app-shell/AppShellContext";
+
 type RecurringTemplateRow = {
   id: string;
   description: string;
@@ -180,6 +182,7 @@ function DialogButton({
 
 export default function GroupDetailPage() {
   const { id } = useParams();
+  const { setExtraSidebarItems } = useAppShell();
   const { confirm, prompt } = useModal(); // added `prompt` for the arbitration note dialog
   const [initialLoading, setInitialLoading] = useState(true);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -237,8 +240,20 @@ export default function GroupDetailPage() {
   const [sendingEmail, setSendingEmail] = useState(false);
 
   const isOnline = useOnlineStatus();
-const [queuedCount, setQueuedCount] = useState(0);
-const [syncing, setSyncing] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+
+  // Register this group's sub-nav into the shared sidebar. Cleared on unmount
+  // so it doesn't linger when navigating back to the dashboard or elsewhere.
+  useEffect(() => {
+    setExtraSidebarItems([
+      { href: `/groups/${id}`, label: "View balance" },
+      { href: `/groups/${id}/settle`, label: "Settle" },
+      { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
+    ]);
+    return () => setExtraSidebarItems([]);
+  }, [id, setExtraSidebarItems]);
+
   const loadDisputes = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/disputes`);
     if (res.ok) {
@@ -248,100 +263,104 @@ const [syncing, setSyncing] = useState(false);
       setIsAdmin(false);
     }
   }, [id]);
-const refreshQueueCount = useCallback(async () => {
-  const queued = await getQueuedExpenses();
-  setQueuedCount(queued.filter((q) => q.groupId === id).length);
-}, [id]);
 
-useEffect(() => {
-  refreshQueueCount();
-}, [refreshQueueCount]);
+  const refreshQueueCount = useCallback(async () => {
+    const queued = await getQueuedExpenses();
+    setQueuedCount(queued.filter((q) => q.groupId === id).length);
+  }, [id]);
 
-useEffect(() => {
-  if (!isOnline || queuedCount === 0) return;
-  setSyncing(true);
-  syncQueuedExpenses((groupId, expense) => {
-    if (groupId === id) {
-      setExpenses((prev) => {
-        const filtered = prev.filter((e) => e.clientId !== expense.clientId);
-        return [expense, ...filtered];
-      });
-    }
-  }).then(async ({ synced, failed }) => {
-    setSyncing(false);
-    await refreshQueueCount();
-    if (synced > 0) loadSummary();
-    if (failed > 0) {
-      await confirm({
-        title: "Some expenses couldn't sync",
-        message: `${failed} queued expense(s) failed to sync — check they're valid and try again.`,
-        mode: "alert",
-      });
-    }
-  });
-}, [isOnline, queuedCount, id]);
+  useEffect(() => {
+    refreshQueueCount();
+  }, [refreshQueueCount]);
+
+  useEffect(() => {
+    if (!isOnline || queuedCount === 0) return;
+    setSyncing(true);
+    syncQueuedExpenses((groupId, expense) => {
+      if (groupId === id) {
+        setExpenses((prev) => {
+          const filtered = prev.filter((e) => e.clientId !== expense.clientId);
+          return [expense, ...filtered];
+        });
+      }
+    }).then(async ({ synced, failed }) => {
+      setSyncing(false);
+      await refreshQueueCount();
+      if (synced > 0) loadSummary();
+      if (failed > 0) {
+        await confirm({
+          title: "Some expenses couldn't sync",
+          message: `${failed} queued expense(s) failed to sync — check they're valid and try again.`,
+          mode: "alert",
+        });
+      }
+    });
+  }, [isOnline, queuedCount, id]);
+
   useEffect(() => {
     loadDisputes();
   }, [loadDisputes]);
-async function openStatementModal() {
-  setLoadingStatement(true);
-  setShowStatementModal(true);
-  try {
-    const res = await fetch(`/api/groups/${id}/statement?days=${statementPeriod}`);
-    setStatementData(await res.json());
-  } finally {
-    setLoadingStatement(false);
-  }
-}
 
-async function emailStatement() {
-  setSendingEmail(true);
-  try {
-    const res = await fetch(`/api/groups/${id}/statement/email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ periodDays: statementPeriod }),
-    });
-
-    let data: any = null;
+  async function openStatementModal() {
+    setLoadingStatement(true);
+    setShowStatementModal(true);
     try {
-      data = await res.json();
-    } catch {
-      await confirm({ title: "Something went wrong", message: "Unexpected response from server.", mode: "alert" });
-      return;
+      const res = await fetch(`/api/groups/${id}/statement?days=${statementPeriod}`);
+      setStatementData(await res.json());
+    } finally {
+      setLoadingStatement(false);
     }
-
-    if (!res.ok) {
-      await confirm({ title: "Couldn't send statement", message: data?.error || "Please try again.", mode: "alert" });
-      return;
-    }
-
-    await confirm({
-      title: "Statement sent",
-      message: `Emailed to ${data.sentTo} of ${data.totalMembers} members.`,
-      mode: "alert",
-    });
-  } finally {
-    setSendingEmail(false);
   }
-}
 
-function shareViaWhatsApp() {
-  if (!statementData) return;
-  const rupees = (p: number) => (p / 100).toFixed(2);
-  const lines = [
-    `*${statementData.groupName} — ${statementData.periodDays}-day statement*`,
-    ``,
-    `Total spent: ₹${rupees(statementData.totalSpentPaise)} (${statementData.expenseCount} expenses)`,
-    ``,
-    `*Balances:*`,
-    ...statementData.currentBalances.map(
-      (b: any) => `${b.name}: ${b.amountPaise >= 0 ? "is owed" : "owes"} ₹${rupees(Math.abs(b.amountPaise))}`
-    ),
-  ];
-  const text = encodeURIComponent(lines.join("\n"));
-  window.open(`https://wa.me/?text=${text}`, "_blank");
-}
+  async function emailStatement() {
+    setSendingEmail(true);
+    try {
+      const res = await fetch(`/api/groups/${id}/statement/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ periodDays: statementPeriod }),
+      });
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        await confirm({ title: "Something went wrong", message: "Unexpected response from server.", mode: "alert" });
+        return;
+      }
+
+      if (!res.ok) {
+        await confirm({ title: "Couldn't send statement", message: data?.error || "Please try again.", mode: "alert" });
+        return;
+      }
+
+      await confirm({
+        title: "Statement sent",
+        message: `Emailed to ${data.sentTo} of ${data.totalMembers} members.`,
+        mode: "alert",
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  }
+
+  function shareViaWhatsApp() {
+    if (!statementData) return;
+    const rupees = (p: number) => (p / 100).toFixed(2);
+    const lines = [
+      `*${statementData.groupName} — ${statementData.periodDays}-day statement*`,
+      ``,
+      `Total spent: ₹${rupees(statementData.totalSpentPaise)} (${statementData.expenseCount} expenses)`,
+      ``,
+      `*Balances:*`,
+      ...statementData.currentBalances.map(
+        (b: any) => `${b.name}: ${b.amountPaise >= 0 ? "is owed" : "owes"} ₹${rupees(Math.abs(b.amountPaise))}`
+      ),
+    ];
+    const text = encodeURIComponent(lines.join("\n"));
+    window.open(`https://wa.me/?text=${text}`, "_blank");
+  }
+
   // Rewritten: uses the modal's prompt() dialog instead of the native
   // window.prompt(). Sequencing: dialog opens first (no loader behind it,
   // since nothing is loading yet) -> user types a note and clicks OK ->
@@ -402,18 +421,18 @@ function shareViaWhatsApp() {
   }, [id]);
 
   const loadPendingRequests = useCallback(() => {
-  return fetch(`/api/edit-permissions/pending?groupId=${id}`)
-    .then((r) => r.json())
-    .then((data) => {
-      if (Array.isArray(data)) setPendingRequests(data);
-    })
-    .catch(() => {}); // NEW — swallow network errors (e.g. offline) instead of crashing
-}, [id]);
+    return fetch(`/api/edit-permissions/pending?groupId=${id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setPendingRequests(data);
+      })
+      .catch(() => {}); // NEW — swallow network errors (e.g. offline) instead of crashing
+  }, [id]);
 
   const loadMyPermissions = useCallback(() => {
     return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
-    .then((r) => r.json())
-    .then(async (data: any[]) => {
+      .then((r) => r.json())
+      .then(async (data: any[]) => {
         if (!Array.isArray(data)) return;
 
         const map: Record<string, string> = {};
@@ -465,19 +484,19 @@ function shareViaWhatsApp() {
     ]).finally(() => setInitialLoading(false));
 
     const interval = setInterval(() => {
-  if (document.visibilityState === "visible" && navigator.onLine) { // NEW — added navigator.onLine check
-    loadPendingRequests();
-    loadMyPermissions();
-  }
-}, 8000);
+      if (document.visibilityState === "visible" && navigator.onLine) { // NEW — added navigator.onLine check
+        loadPendingRequests();
+        loadMyPermissions();
+      }
+    }, 8000);
 
     function handleFocusOrVisible() {
-  if (document.visibilityState === "visible" && navigator.onLine) { // NEW
-    loadSummary();
-    loadExpenses();
-    loadRecurringTemplates();
-  }
-}
+      if (document.visibilityState === "visible" && navigator.onLine) { // NEW
+        loadSummary();
+        loadExpenses();
+        loadRecurringTemplates();
+      }
+    }
     window.addEventListener("focus", handleFocusOrVisible);
     document.addEventListener("visibilitychange", handleFocusOrVisible);
 
@@ -687,139 +706,139 @@ function shareViaWhatsApp() {
   }
 
   async function addExpense(confirmDuplicate = false, confirmMerge = false) {
-  if (!confirmDuplicate && !confirmMerge) {
-    if (!description.trim() || !amount) return;
-  }
-
-  setError(null);
-
-  const amountPaise = Math.round(parseFloat(amount) * 100);
-
-  const exactAmounts = expenseSplitType === "EXACT"
-    ? Object.fromEntries(Object.entries(exactInputs).map(([uid, v]) => [uid, Math.round(parseFloat(v) * 100)]))
-    : undefined;
-
-  const percentages = expenseSplitType === "PERCENTAGE"
-    ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
-    : undefined;
-
-  const shareUnits = expenseSplitType === "SHARES"
-    ? Object.fromEntries(
-      Object.entries(shareInputs)
-        .filter(([, v]) => v)
-        .map(([uid, v]) => [uid, parseInt(v)])
-    )
-    : undefined;
-
-  const payload = { description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits };
-
-  // ── NEW: offline path — queue locally, show an optimistic entry ──
-  if (!isOnline && !confirmDuplicate && !confirmMerge) {
-    const clientId = generateClientId();
-    await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
-
-    const payerName = members.find((m) => m.userId === paidById)?.user?.name || "Someone";
-    setExpenses((prev) => [
-      {
-        id: `pending-${clientId}`,
-        clientId,
-        description,
-        amountPaise,
-        paidById,
-        paidBy: { name: payerName },
-        splitType: expenseSplitType,
-        splits: [],
-        payments: [],
-        pendingSync: true,
-      },
-      ...prev,
-    ]);
-
-    setDescription("");
-    setAmount("");
-    setExactInputs({});
-    setPercentInputs({});
-    setShareInputs({});
-    setExpenseSplitType("EQUAL");
-    setShowExpenseModal(false);
-    await refreshQueueCount();
-    return;
-  }
-
-  setAddingExpense(true);
-  setAddingExpenseLabel(
-    confirmMerge ? `Merging "${description.trim()}"` : "Saving expense"
-  );
-  try {
-    const clientId = generateClientId(); // NEW — always attach, so a mid-request drop can be safely retried
-
-    const res = await fetch(`/api/groups/${id}/expenses`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate, confirmMerge, clientId }),
-    });
-
-    if (res.status === 409) {
-      const data = await res.json();
-      setAddingExpense(false);
-
-      if (data.mergeCandidate) {
-        const ok = await confirm({
-          title: "Merge expense?",
-          message: data.message,
-          confirmLabel: "Merge into existing",
-        });
-        if (ok) await addExpense(false, true);
-        return;
-      } else {
-        const ok = await confirm({
-          title: "Possible duplicate",
-          message: data.message,
-          confirmLabel: "Add anyway",
-        });
-        if (ok) await addExpense(true, false);
-        return;
-      }
+    if (!confirmDuplicate && !confirmMerge) {
+      if (!description.trim() || !amount) return;
     }
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Failed to add expense");
+
+    setError(null);
+
+    const amountPaise = Math.round(parseFloat(amount) * 100);
+
+    const exactAmounts = expenseSplitType === "EXACT"
+      ? Object.fromEntries(Object.entries(exactInputs).map(([uid, v]) => [uid, Math.round(parseFloat(v) * 100)]))
+      : undefined;
+
+    const percentages = expenseSplitType === "PERCENTAGE"
+      ? Object.fromEntries(Object.entries(percentInputs).map(([uid, v]) => [uid, parseFloat(v)]))
+      : undefined;
+
+    const shareUnits = expenseSplitType === "SHARES"
+      ? Object.fromEntries(
+        Object.entries(shareInputs)
+          .filter(([, v]) => v)
+          .map(([uid, v]) => [uid, parseInt(v)])
+      )
+      : undefined;
+
+    const payload = { description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits };
+
+    // ── offline path — queue locally, show an optimistic entry ──
+    if (!isOnline && !confirmDuplicate && !confirmMerge) {
+      const clientId = generateClientId();
+      await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
+
+      const payerName = members.find((m) => m.userId === paidById)?.user?.name || "Someone";
+      setExpenses((prev) => [
+        {
+          id: `pending-${clientId}`,
+          clientId,
+          description,
+          amountPaise,
+          paidById,
+          paidBy: { name: payerName },
+          splitType: expenseSplitType,
+          splits: [],
+          payments: [],
+          pendingSync: true,
+        },
+        ...prev,
+      ]);
+
+      setDescription("");
+      setAmount("");
+      setExactInputs({});
+      setPercentInputs({});
+      setShareInputs({});
+      setExpenseSplitType("EQUAL");
+      setShowExpenseModal(false);
+      await refreshQueueCount();
       return;
     }
 
-    const expense = await res.json();
-    setExpenses((prev) => {
-      const alreadyThere = prev.some((e) => e.id === expense.id);
-      return alreadyThere
-        ? prev.map((e) => (e.id === expense.id ? expense : e))
-        : [expense, ...prev];
-    });
-    setDescription("");
-    setAmount("");
-    setExactInputs({});
-    setPercentInputs({});
-    setShareInputs({});
-    setExpenseSplitType("EQUAL");
-    setShowExpenseModal(false);
+    setAddingExpense(true);
+    setAddingExpenseLabel(
+      confirmMerge ? `Merging "${description.trim()}"` : "Saving expense"
+    );
+    try {
+      const clientId = generateClientId(); // always attach, so a mid-request drop can be safely retried
 
-    loadSummary();
-  } catch (networkErr) {
-    // NEW — genuine mid-request network failure: fall back to queuing
-    // instead of losing the user's input entirely.
-    setAddingExpense(false);
-    const clientId = generateClientId();
-    await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
-    await refreshQueueCount();
-    await confirm({
-      title: "Connection lost",
-      message: "Your expense has been saved and will sync automatically once you're back online.",
-      mode: "alert",
-    });
-    setShowExpenseModal(false);
-  } finally {
-    setAddingExpense(false);
+      const res = await fetch(`/api/groups/${id}/expenses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits, confirmDuplicate, confirmMerge, clientId }),
+      });
+
+      if (res.status === 409) {
+        const data = await res.json();
+        setAddingExpense(false);
+
+        if (data.mergeCandidate) {
+          const ok = await confirm({
+            title: "Merge expense?",
+            message: data.message,
+            confirmLabel: "Merge into existing",
+          });
+          if (ok) await addExpense(false, true);
+          return;
+        } else {
+          const ok = await confirm({
+            title: "Possible duplicate",
+            message: data.message,
+            confirmLabel: "Add anyway",
+          });
+          if (ok) await addExpense(true, false);
+          return;
+        }
+      }
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to add expense");
+        return;
+      }
+
+      const expense = await res.json();
+      setExpenses((prev) => {
+        const alreadyThere = prev.some((e) => e.id === expense.id);
+        return alreadyThere
+          ? prev.map((e) => (e.id === expense.id ? expense : e))
+          : [expense, ...prev];
+      });
+      setDescription("");
+      setAmount("");
+      setExactInputs({});
+      setPercentInputs({});
+      setShareInputs({});
+      setExpenseSplitType("EQUAL");
+      setShowExpenseModal(false);
+
+      loadSummary();
+    } catch (networkErr) {
+      // genuine mid-request network failure: fall back to queuing
+      // instead of losing the user's input entirely.
+      setAddingExpense(false);
+      const clientId = generateClientId();
+      await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
+      await refreshQueueCount();
+      await confirm({
+        title: "Connection lost",
+        message: "Your expense has been saved and will sync automatically once you're back online.",
+        mode: "alert",
+      });
+      setShowExpenseModal(false);
+    } finally {
+      setAddingExpense(false);
+    }
   }
-}
 
   function openExpenseModal() {
     setError(null);
@@ -905,19 +924,16 @@ function shareViaWhatsApp() {
     <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
       <SFLoaderOverlay visible={initialLoading || actionLoading} label={loaderLabel} />
 
-      <Link href="/dashboard" style={{ fontSize: 14, color: "#888" }}>
-        ← Back to dashboard
-      </Link>
-{!isOnline && (
-  <div style={{ padding: "8px 14px", background: "#451a03", border: "1px solid #92400e", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#fbbf24" }}>
-    📡 You're offline — new expenses will be saved locally and synced automatically once you're back online.
-  </div>
-)}
-{isOnline && queuedCount > 0 && (
-  <div style={{ padding: "8px 14px", background: "#172554", border: "1px solid #1e40af", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#93c5fd" }}>
-    {syncing ? "🔄 Syncing queued expenses..." : `🔄 ${queuedCount} queued expense(s) waiting to sync`}
-  </div>
-)}
+      {!isOnline && (
+        <div style={{ padding: "8px 14px", background: "#451a03", border: "1px solid #92400e", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#fbbf24" }}>
+          📡 You're offline — new expenses will be saved locally and synced automatically once you're back online.
+        </div>
+      )}
+      {isOnline && queuedCount > 0 && (
+        <div style={{ padding: "8px 14px", background: "#172554", border: "1px solid #1e40af", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#93c5fd" }}>
+          {syncing ? "🔄 Syncing queued expenses..." : `🔄 ${queuedCount} queued expense(s) waiting to sync`}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <h1 style={{ margin: 0 }}>Group</h1>
@@ -951,12 +967,6 @@ function shareViaWhatsApp() {
           )}
         />
       </div>
-
-      <Link href={`/groups/${id}/balances`}>View balances</Link>
-      {" | "}
-      <Link href={`/groups/${id}/settle`}>Settle up</Link>
-      {" | "}
-      <Link href={`/groups/${id}/recurring`}>Recurring expenses</Link>
 
       <h2>Members</h2>
       <ul>
@@ -1005,7 +1015,7 @@ function shareViaWhatsApp() {
       <button onClick={() => setShowPlaceholderModal(true)}>Add placeholder member</button>
 
       <button onClick={openExpenseModal}>Add expense</button>
-<button onClick={openStatementModal}>📊 Generate statement</button>
+      <button onClick={openStatementModal}>📊 Generate statement</button>
       {summary && <GroupSummaryCards summary={summary} recurringTemplates={recurringTemplates} />}
 
       <h2>Expenses</h2>
@@ -1096,70 +1106,72 @@ function shareViaWhatsApp() {
           ))}
         </div>
       )}
-{showStatementModal && (
-  <Dialog
-    icon="📊"
-    iconColor="#2563eb"
-    title="Group statement"
-    onBackdropClick={() => setShowStatementModal(false)}
-    width={480}
-    footer={
-      <>
-        <DialogButton variant="secondary" onClick={() => setShowStatementModal(false)}>Close</DialogButton>
-        <DialogButton onClick={shareViaWhatsApp} disabled={!statementData}>📱 Share via WhatsApp</DialogButton>
-        <DialogButton onClick={emailStatement} disabled={!statementData || sendingEmail}>
-          {sendingEmail ? <Spinner /> : "📧 Email to all members"}
-        </DialogButton>
-      </>
-    }
-  >
-    <select value={statementPeriod} onChange={(e) => { setStatementPeriod(Number(e.target.value)); openStatementModal(); }}>
-      <option value={7}>Last 7 days</option>
-      <option value={30}>Last 30 days</option>
-      <option value={90}>Last 90 days</option>
-    </select>
 
-    {loadingStatement && <Spinner />}
+      {showStatementModal && (
+        <Dialog
+          icon="📊"
+          iconColor="#2563eb"
+          title="Group statement"
+          onBackdropClick={() => setShowStatementModal(false)}
+          width={480}
+          footer={
+            <>
+              <DialogButton variant="secondary" onClick={() => setShowStatementModal(false)}>Close</DialogButton>
+              <DialogButton onClick={shareViaWhatsApp} disabled={!statementData}>📱 Share via WhatsApp</DialogButton>
+              <DialogButton onClick={emailStatement} disabled={!statementData || sendingEmail}>
+                {sendingEmail ? <Spinner /> : "📧 Email to all members"}
+              </DialogButton>
+            </>
+          }
+        >
+          <select value={statementPeriod} onChange={(e) => { setStatementPeriod(Number(e.target.value)); openStatementModal(); }}>
+            <option value={7}>Last 7 days</option>
+            <option value={30}>Last 30 days</option>
+            <option value={90}>Last 90 days</option>
+          </select>
 
-    {statementData && !loadingStatement && (
-  <div style={{ fontSize: 13 }}>
-    <p>Total spent: ₹{(statementData.totalSpentPaise / 100).toFixed(2)} ({statementData.expenseCount} expenses)</p>
-    <p>Settlements: {statementData.settlementsConfirmed}/{statementData.settlementsInPeriod} confirmed</p>
+          {loadingStatement && <Spinner />}
 
-    <h4>Payment status</h4>
-    {statementData.settlements.length === 0 && <p style={{ color: "#888" }}>No settlement attempts this period.</p>}
-    {statementData.settlements.map((s: any, i: number) => {
-      const label =
-        s.status === "both_confirmed" ? { text: "✓ Paid & confirmed", color: "#86efac" } :
-        s.status === "payer_confirmed" ? { text: "⏳ Awaiting confirmation", color: "#fbbf24" } :
-        s.status === "disputed" ? { text: "⚠ Disputed", color: "#f87171" } :
-        { text: "✗ Not yet paid", color: "#f87171" };
-      return (
-        <p key={i} style={{ margin: "4px 0" }}>
-          {s.fromName} → {s.toName}: ₹{(s.amountPaise / 100).toFixed(2)} —{" "}
-          <span style={{ color: label.color }}>{label.text}</span>
-        </p>
-      );
-    })}
+          {statementData && !loadingStatement && (
+            <div style={{ fontSize: 13 }}>
+              <p>Total spent: ₹{(statementData.totalSpentPaise / 100).toFixed(2)} ({statementData.expenseCount} expenses)</p>
+              <p>Settlements: {statementData.settlementsConfirmed}/{statementData.settlementsInPeriod} confirmed</p>
 
-    <h4>Still pending</h4>
-    {statementData.stillOwing.length === 0 && <p style={{ color: "#86efac" }}>Everyone is settled up ✓</p>}
-    {statementData.stillOwing.map((p: any, i: number) => (
-      <p key={i} style={{ color: "#f87171", margin: "4px 0" }}>
-        {p.name}: ₹{(p.amountPaise / 100).toFixed(2)} still owed
-      </p>
-    ))}
+              <h4>Payment status</h4>
+              {statementData.settlements.length === 0 && <p style={{ color: "#888" }}>No settlement attempts this period.</p>}
+              {statementData.settlements.map((s: any, i: number) => {
+                const label =
+                  s.status === "both_confirmed" ? { text: "✓ Paid & confirmed", color: "#86efac" } :
+                  s.status === "payer_confirmed" ? { text: "⏳ Awaiting confirmation", color: "#fbbf24" } :
+                  s.status === "disputed" ? { text: "⚠ Disputed", color: "#f87171" } :
+                  { text: "✗ Not yet paid", color: "#f87171" };
+                return (
+                  <p key={i} style={{ margin: "4px 0" }}>
+                    {s.fromName} → {s.toName}: ₹{(s.amountPaise / 100).toFixed(2)} —{" "}
+                    <span style={{ color: label.color }}>{label.text}</span>
+                  </p>
+                );
+              })}
 
-    <h4>Balances</h4>
-    {statementData.currentBalances.map((b: any, i: number) => (
-      <p key={i} style={{ color: b.amountPaise >= 0 ? "#86efac" : "#f87171" }}>
-        {b.name}: {b.amountPaise >= 0 ? "is owed" : "owes"} ₹{(Math.abs(b.amountPaise) / 100).toFixed(2)}
-      </p>
-    ))}
-  </div>
-)}
-  </Dialog>
-)}
+              <h4>Still pending</h4>
+              {statementData.stillOwing.length === 0 && <p style={{ color: "#86efac" }}>Everyone is settled up ✓</p>}
+              {statementData.stillOwing.map((p: any, i: number) => (
+                <p key={i} style={{ color: "#f87171", margin: "4px 0" }}>
+                  {p.name}: ₹{(p.amountPaise / 100).toFixed(2)} still owed
+                </p>
+              ))}
+
+              <h4>Balances</h4>
+              {statementData.currentBalances.map((b: any, i: number) => (
+                <p key={i} style={{ color: b.amountPaise >= 0 ? "#86efac" : "#f87171" }}>
+                  {b.name}: {b.amountPaise >= 0 ? "is owed" : "owes"} ₹{(Math.abs(b.amountPaise) / 100).toFixed(2)}
+                </p>
+              ))}
+            </div>
+          )}
+        </Dialog>
+      )}
+
       {showAddMemberModal && (
         <Dialog
           icon="＋"

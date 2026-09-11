@@ -1,0 +1,184 @@
+/* Sidebar + topbar shell for the /dashboard section. Same color tokens as
+   dashboard.css / home.css (white/zinc-900 light, black/zinc-800 dark,
+   indigo/sky accents) — just a different arrangement of them. */
+
+.dash-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.dark .dash-shell {
+  background: #000000;
+}
+
+/* ---------- Top bar ---------- */
+
+.dash-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid #e4e4e7;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+}
+
+.dark .dash-topbar {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.dash-topbar-brand {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #18181b;
+  flex-shrink: 0;
+}
+
+.dark .dash-topbar-brand {
+  color: #ffffff;
+}
+
+.dash-topbar-search {
+  flex: 1 1 auto;
+  max-width: 22rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 34px;
+  border-radius: 0.5rem;
+  border: 1px solid #e4e4e7;
+  background: #fafafa;
+  padding: 0 0.625rem;
+  color: #71717a;
+}
+
+.dash-topbar-search svg {
+  height: 15px;
+  width: 15px;
+  flex-shrink: 0;
+}
+
+.dash-topbar-search input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.8125rem;
+  color: #18181b;
+}
+
+.dash-topbar-search input::placeholder {
+  color: #a1a1aa;
+}
+
+.dark .dash-topbar-search {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dark .dash-topbar-search input {
+  color: #ffffff;
+}
+
+.dash-topbar-actions {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* ---------- Body: sidebar + main ---------- */
+
+.dash-shell-body {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+.dash-sidebar {
+  flex-shrink: 0;
+  width: 220px;
+  border-right: 1px solid #e4e4e7;
+  padding: 1.25rem 0.75rem;
+}
+
+.dark .dash-sidebar {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.dash-sidebar-label {
+  padding: 0 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #a1a1aa;
+}
+
+.dash-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.dash-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #52525b;
+  border-left: 2px solid transparent;
+}
+
+.dash-sidebar-item svg {
+  height: 16px;
+  width: 16px;
+  flex-shrink: 0;
+}
+
+.dash-sidebar-item:hover {
+  background: #f4f4f5;
+  color: #18181b;
+}
+
+.dash-sidebar-item.active {
+  background: #eef2ff;
+  color: #4338ca;
+  border-left-color: #4f46e5;
+  font-weight: 600;
+}
+
+.dark .dash-sidebar-item {
+  color: #a1a1aa;
+}
+
+.dark .dash-sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}
+
+.dark .dash-sidebar-item.active {
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  border-left-color: #818cf8;
+}
+
+.dash-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: hidden;
+}

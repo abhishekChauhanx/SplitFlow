@@ -1,0 +1,504 @@
+/* ===========================================================
+   Dashboard page styles — external stylesheet (no inline styles,
+   no Tailwind utility soup in the JSX). Mirrors the visual
+   language already set up in home.css (hero-glow, hero-grid,
+   text-gradient) but scoped to dashboard layout needs.
+
+   NOTE: this file is imported as a plain global stylesheet
+   (`import "./dashboard.css"`), NOT a CSS Module — so dark-mode
+   overrides use a plain `.dark` ancestor selector (same pattern
+   as home.css), not the CSS-Modules-only `:global()` syntax.
+   =========================================================== */
+
+.dash-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #ffffff;
+  color: #18181b;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.dark .dash-page {
+  background: #000000;
+  color: #ffffff;
+}
+
+.dash-container {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 72rem; /* widened slightly from 4xl → 6xl-ish so it fills more on large screens */
+  margin: 0 auto;    /* centered again — the earlier left-align is what created the dead zone on the right */
+  padding: 2rem 1rem;
+}
+
+@media (min-width: 640px) {
+  .dash-container {
+    padding: 3rem 1.5rem;
+  }
+}
+
+/* ---------- Header ---------- */
+
+.dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.dash-welcome {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #71717a;
+}
+
+.dark .dash-welcome {
+  color: #a1a1aa;
+}
+
+.dash-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dash-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+@media (min-width: 640px) {
+  .dash-title {
+    font-size: 1.875rem;
+  }
+}
+
+/* ---------- Stat strip ---------- */
+
+.dash-stats {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  text-align: left;
+}
+
+@media (min-width: 640px) {
+  .dash-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.dash-stat-card {
+  border-radius: 1rem;
+  border: 1px solid #e4e4e7;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(4px);
+  padding: 1rem;
+}
+
+.dark .dash-stat-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dash-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.dash-stat-label {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: #71717a;
+}
+
+.dash-summary-card {
+  grid-column: span 2 / span 2;
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 1rem;
+  border: 1px solid #c7d2fe;
+  background: linear-gradient(to bottom right, #eef2ff, #f0f9ff);
+  padding: 1rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dash-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+@media (min-width: 640px) {
+  .dash-summary-card {
+    grid-column: span 1 / span 1;
+  }
+}
+
+.dark .dash-summary-card {
+  border-color: rgba(129, 140, 248, 0.2);
+  background: linear-gradient(to bottom right, rgba(99, 102, 241, 0.1), rgba(14, 165, 233, 0.1));
+}
+
+.dash-summary-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #4338ca;
+}
+
+.dark .dash-summary-title {
+  color: #a5b4fc;
+}
+
+.dash-summary-sub {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: #6366f1;
+}
+
+.dash-summary-arrow {
+  color: #a5b4fc;
+}
+
+/* ---------- Section labels ---------- */
+
+.dash-section {
+  margin-top: 2rem;
+}
+
+.dash-section-label {
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+  text-align: left;
+}
+
+/* ---------- Quick links grid ---------- */
+
+.dash-quicklinks-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  text-align: left;
+}
+
+@media (min-width: 640px) {
+  .dash-quicklinks-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.dash-quicklink-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  padding: 1rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dash-quicklink-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.dark .dash-quicklink-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #18181b;
+}
+
+.dash-quicklink-icon {
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+}
+
+.dash-quicklink-icon svg {
+  height: 1.125rem;
+  width: 1.125rem;
+}
+
+.dash-quicklink-icon.accent-indigo {
+  background: linear-gradient(to bottom right, rgba(99, 102, 241, 0.1), rgba(56, 189, 248, 0.1));
+  color: #4f46e5;
+}
+
+.dash-quicklink-icon.accent-sky {
+  background: linear-gradient(to bottom right, rgba(14, 165, 233, 0.1), rgba(129, 140, 248, 0.1));
+  color: #0284c7;
+}
+
+.dash-quicklink-icon.accent-emerald {
+  background: linear-gradient(to bottom right, rgba(16, 185, 129, 0.1), rgba(45, 212, 191, 0.1));
+  color: #059669;
+}
+
+.dark .dash-quicklink-icon.accent-indigo {
+  background: linear-gradient(to bottom right, rgba(99, 102, 241, 0.2), rgba(56, 189, 248, 0.2));
+  color: #a5b4fc;
+}
+
+.dark .dash-quicklink-icon.accent-sky {
+  background: linear-gradient(to bottom right, rgba(14, 165, 233, 0.2), rgba(129, 140, 248, 0.2));
+  color: #7dd3fc;
+}
+
+.dark .dash-quicklink-icon.accent-emerald {
+  background: linear-gradient(to bottom right, rgba(16, 185, 129, 0.2), rgba(45, 212, 191, 0.2));
+  color: #6ee7b7;
+}
+
+.dash-quicklink-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dash-quicklink-desc {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: #71717a;
+}
+
+/* ---------- Notification / dev row ---------- */
+
+.dash-actions-row {
+  margin-top: 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: flex-start;
+}
+
+.dash-test-notif-btn {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #a1a1aa;
+  text-decoration: underline dotted;
+  text-underline-offset: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.dash-test-notif-btn:hover {
+  color: #52525b;
+}
+
+/* ---------- New group creator ---------- */
+
+.dash-group-creator {
+  display: flex;
+  gap: 0.5rem;
+  border-radius: 1rem;
+  border: 1px solid #e4e4e7;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(4px);
+}
+
+.dark .dash-group-creator {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+}
+
+.dash-group-input {
+  height: 2.75rem;
+  flex: 1 1 0%;
+  border: 0;
+  background: transparent;
+  padding: 0 0.875rem;
+  font-size: 0.875rem;
+  outline: none;
+  text-align: left;
+}
+
+.dash-group-input::placeholder {
+  color: #a1a1aa;
+}
+
+.dash-create-btn {
+  display: flex;
+  height: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(to right, #4f46e5, #0ea5e9);
+  padding: 0 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.2);
+  transition: box-shadow 0.15s ease;
+}
+
+.dash-create-btn:hover:not(:disabled) {
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.35);
+}
+
+.dash-create-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.dark .dash-create-btn {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: none;
+}
+
+/* ---------- Groups list ---------- */
+
+.dash-groups-empty {
+  border-radius: 1rem;
+  border: 1px dashed #d4d4d8;
+  background: rgba(250, 250, 250, 0.5);
+  padding: 2.5rem;
+  text-align: center;
+}
+
+.dash-groups-empty p {
+  font-size: 0.875rem;
+  color: #71717a;
+}
+
+.dash-groups-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+@media (min-width: 640px) {
+  .dash-groups-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .dash-groups-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.dash-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  border-radius: 1rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.dash-group-card:hover {
+  transform: translateY(-2px);
+  border-color: #c7d2fe;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.dark .dash-group-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #18181b;
+  box-shadow: none;
+}
+
+.dash-group-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.dash-group-avatar {
+  display: flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  background: linear-gradient(to bottom right, rgba(99, 102, 241, 0.1), rgba(56, 189, 248, 0.1));
+  font-size: 1rem;
+  font-weight: 600;
+  color: #4f46e5;
+}
+
+.dash-group-arrow {
+  color: #d4d4d8;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.dash-group-card:hover .dash-group-arrow {
+  transform: translateX(2px);
+  color: #6366f1;
+}
+
+.dash-group-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dash-group-meta {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: #a1a1aa;
+}
+
+.dash-group-members {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+}
+
+.dash-member-chip {
+  display: flex;
+  height: 1.5rem;
+  width: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 2px solid #ffffff;
+  background: #f4f4f5;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: #52525b;
+  margin-left: -0.5rem;
+}
+
+.dark .dash-member-chip {
+  border-color: #18181b;
+  background: #27272a;
+  color: #d4d4d8;
+}
+
+.dash-member-chip:first-child {
+  margin-left: 0;
+}
+
+.dash-member-chip.extra {
+  background: #e4e4e7;
+}
+
+.dark .dash-member-chip.extra {
+  background: #3f3f46;
+}
