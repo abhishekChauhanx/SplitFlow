@@ -6,14 +6,19 @@ export type SidebarExtraItem = {
   label: string;
 };
 
+export type SidebarSection = {
+  label: string;
+  items: SidebarExtraItem[];
+} | null;
+
 type AppShellCtx = {
   search: string;
   setSearch: (v: string) => void;
   pendingRequests: any[];
   refreshPendingRequests: () => Promise<void>;
   registerInfoHandler: (fn: (() => void) | null) => void;
-  extraSidebarItems: SidebarExtraItem[];
-  setExtraSidebarItems: (items: SidebarExtraItem[]) => void;
+  sidebarSection: SidebarSection;
+  setSidebarSection: (section: SidebarSection) => void;
 };
 
 const Ctx = createContext<AppShellCtx | null>(null);

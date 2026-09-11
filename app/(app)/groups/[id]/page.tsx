@@ -10,12 +10,14 @@ import { useModal } from "@/components/ModalProvider";
 import GroupSummaryCards from "@/components/GroupSummaryCards";
 import GroupExpensesGrid from "@/components/GroupExpensesGrid";
 import GroupRecurringGrid from "@/components/GroupRecurringGrid";
-import NotificationBell from "@/components/NotificationBell";
+// import NotificationBell from "@/components/NotificationBell";
 import type { GroupSummary } from "@/lib/group-summary";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { enqueueExpense, generateClientId, getQueuedExpenses } from "@/lib/offline-queue";
 import { syncQueuedExpenses } from "@/lib/sync-queue";
 import { useAppShell } from "@/components/app-shell/AppShellContext";
+import "../../../home.css";
+import "./group.css";
 
 type RecurringTemplateRow = {
   id: string;
@@ -74,74 +76,19 @@ function Dialog({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: `min(${width}px, 90vw)`,
-          maxHeight: "85vh",
-          display: "flex",
-          flexDirection: "column",
-          borderRadius: 10,
-          overflow: "hidden",
-          border: "1px solid #333",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
-          background: "#161616",
-        }}
+        className="group-dialog"
+        style={{ width: `min(${width}px, 90vw)` }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            padding: "12px 16px",
-            background: "linear-gradient(180deg, #232323 0%, #1a1a1a 100%)",
-            borderBottom: "1px solid #2a2a2a",
-            flexShrink: 0,
-          }}
-        >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              background: iconColor,
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: 700,
-              fontSize: 16,
-              flexShrink: 0,
-            }}
-          >
+        <div className="group-dialog-header">
+          <div className="group-dialog-icon" style={{ background: iconColor }}>
             {icon}
           </div>
-          <span style={{ fontSize: 15, fontWeight: 600, color: "#eee" }}>{title}</span>
+          <span className="group-dialog-title">{title}</span>
         </div>
 
-        <div
-          style={{
-            padding: "16px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            overflowY: "auto",
-          }}
-        >
-          {children}
-        </div>
+        <div className="group-dialog-body">{children}</div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 8,
-            padding: "12px 16px",
-            background: "#141414",
-            borderTop: "1px solid #2a2a2a",
-            flexShrink: 0,
-          }}
-        >
-          {footer}
-        </div>
+        <div className="group-dialog-footer">{footer}</div>
       </div>
     </div>
   );
@@ -158,23 +105,8 @@ function DialogButton({
   variant?: "primary" | "secondary";
   children: React.ReactNode;
 }) {
-  const isPrimary = variant === "primary";
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        padding: "6px 16px",
-        borderRadius: 6,
-        border: isPrimary ? "none" : "1px solid #444",
-        background: isPrimary ? "#2563eb" : "transparent",
-        color: isPrimary ? "#fff" : "#ccc",
-        fontWeight: isPrimary ? 600 : 400,
-        cursor: disabled ? "default" : "pointer",
-        opacity: disabled ? 0.6 : 1,
-        fontSize: 13,
-      }}
-    >
+    <button onClick={onClick} disabled={disabled} className={`group-dialog-btn ${variant}`}>
       {children}
     </button>
   );
@@ -182,11 +114,12 @@ function DialogButton({
 
 export default function GroupDetailPage() {
   const { id } = useParams();
-  const { setExtraSidebarItems } = useAppShell();
-  const { confirm, prompt } = useModal(); // added `prompt` for the arbitration note dialog
+  const { setSidebarSection } = useAppShell();
+  const { confirm, prompt } = useModal();
   const [initialLoading, setInitialLoading] = useState(true);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [members, setMembers] = useState<any[]>([]);
+  const [groupName, setGroupName] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [summary, setSummary] = useState<GroupSummary | null>(null);
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplateRow[]>([]);
@@ -243,16 +176,17 @@ export default function GroupDetailPage() {
   const [queuedCount, setQueuedCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
 
-  // Register this group's sub-nav into the shared sidebar. Cleared on unmount
-  // so it doesn't linger when navigating back to the dashboard or elsewhere.
-  useEffect(() => {
-    setExtraSidebarItems([
-      { href: `/groups/${id}`, label: "View balance" },
+ useEffect(() => {
+  setSidebarSection({
+    label: groupName || "Group",
+    items: [
+      { href: `/groups/${id}/balances`, label: "View balance" },
       { href: `/groups/${id}/settle`, label: "Settle" },
       { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
-    ]);
-    return () => setExtraSidebarItems([]);
-  }, [id, setExtraSidebarItems]);
+    ],
+  });
+  return () => setSidebarSection(null);
+}, [id, groupName, setSidebarSection]);
 
   const loadDisputes = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/disputes`);
@@ -361,10 +295,6 @@ export default function GroupDetailPage() {
     window.open(`https://wa.me/?text=${text}`, "_blank");
   }
 
-  // Rewritten: uses the modal's prompt() dialog instead of the native
-  // window.prompt(). Sequencing: dialog opens first (no loader behind it,
-  // since nothing is loading yet) -> user types a note and clicks OK ->
-  // dialog closes -> loader appears while the actual API call runs.
   async function arbitrate(settlementId: string, decision: "payer" | "payee") {
     const note = await prompt({
       title: decision === "payer" ? "Resolve in favor of the payer" : "Resolve in favor of the payee",
@@ -376,9 +306,9 @@ export default function GroupDetailPage() {
       confirmLabel: "Resolve",
       required: true,
     });
-    if (!note) return; // cancelled — no loader, no API call
+    if (!note) return;
 
-    setArbitratingId(settlementId); // loader appears only after the dialog is confirmed
+    setArbitratingId(settlementId);
     try {
       const res = await fetch(`/api/settlements/${settlementId}/arbitrate`, {
         method: "POST",
@@ -387,7 +317,7 @@ export default function GroupDetailPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setArbitratingId(null); // clear loader BEFORE opening the error dialog
+        setArbitratingId(null);
         await confirm({ title: "Couldn't resolve", message: data.error, mode: "alert" });
         return;
       }
@@ -402,6 +332,7 @@ export default function GroupDetailPage() {
     const group = await res.json();
     if (!group || !group.members) return;
     setMembers(group.members);
+    setGroupName(group.name || null);
     if (group.members.length > 0) setPaidById(group.members[0].userId);
   }, [id]);
 
@@ -426,7 +357,7 @@ export default function GroupDetailPage() {
       .then((data) => {
         if (Array.isArray(data)) setPendingRequests(data);
       })
-      .catch(() => {}); // NEW — swallow network errors (e.g. offline) instead of crashing
+      .catch(() => {});
   }, [id]);
 
   const loadMyPermissions = useCallback(() => {
@@ -484,14 +415,14 @@ export default function GroupDetailPage() {
     ]).finally(() => setInitialLoading(false));
 
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible" && navigator.onLine) { // NEW — added navigator.onLine check
+      if (document.visibilityState === "visible" && navigator.onLine) {
         loadPendingRequests();
         loadMyPermissions();
       }
     }, 8000);
 
     function handleFocusOrVisible() {
-      if (document.visibilityState === "visible" && navigator.onLine) { // NEW
+      if (document.visibilityState === "visible" && navigator.onLine) {
         loadSummary();
         loadExpenses();
         loadRecurringTemplates();
@@ -732,7 +663,6 @@ export default function GroupDetailPage() {
 
     const payload = { description, amountPaise, paidById, splitType: expenseSplitType, exactAmounts, percentages, shareUnits };
 
-    // ── offline path — queue locally, show an optimistic entry ──
     if (!isOnline && !confirmDuplicate && !confirmMerge) {
       const clientId = generateClientId();
       await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
@@ -766,11 +696,9 @@ export default function GroupDetailPage() {
     }
 
     setAddingExpense(true);
-    setAddingExpenseLabel(
-      confirmMerge ? `Merging "${description.trim()}"` : "Saving expense"
-    );
+    setAddingExpenseLabel(confirmMerge ? `Merging "${description.trim()}"` : "Saving expense");
     try {
-      const clientId = generateClientId(); // always attach, so a mid-request drop can be safely retried
+      const clientId = generateClientId();
 
       const res = await fetch(`/api/groups/${id}/expenses`, {
         method: "POST",
@@ -823,8 +751,6 @@ export default function GroupDetailPage() {
 
       loadSummary();
     } catch (networkErr) {
-      // genuine mid-request network failure: fall back to queuing
-      // instead of losing the user's input entirely.
       setAddingExpense(false);
       const clientId = generateClientId();
       await enqueueExpense({ clientId, groupId: id as string, payload, createdAt: Date.now() });
@@ -898,7 +824,7 @@ export default function GroupDetailPage() {
     savingEdit ||
     deletingExpenseId !== null ||
     requestingPermissionId !== null ||
-    arbitratingId !== null; // arbitration loader now included in the combined overlay flag
+    arbitratingId !== null;
 
   const loaderLabel = initialLoading
     ? "Loading group"
@@ -921,491 +847,419 @@ export default function GroupDetailPage() {
                     : "";
 
   return (
-    <div style={{ maxWidth: 960, margin: "40px auto", padding: "0 16px" }}>
+    <div className="group-page dash-page">
+      <div className="hero-glow" />
+      <div className="hero-grid" />
+
       <SFLoaderOverlay visible={initialLoading || actionLoading} label={loaderLabel} />
 
-      {!isOnline && (
-        <div style={{ padding: "8px 14px", background: "#451a03", border: "1px solid #92400e", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#fbbf24" }}>
-          📡 You're offline — new expenses will be saved locally and synced automatically once you're back online.
+      <div className="dash-container">
+        <div className="group-breadcrumb">
+          <Link href="/dashboard">Dashboard</Link> / Group
         </div>
-      )}
-      {isOnline && queuedCount > 0 && (
-        <div style={{ padding: "8px 14px", background: "#172554", border: "1px solid #1e40af", borderRadius: 6, margin: "12px 0", fontSize: 13, color: "#93c5fd" }}>
-          {syncing ? "🔄 Syncing queued expenses..." : `🔄 ${queuedCount} queued expense(s) waiting to sync`}
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h1 style={{ margin: 0 }}>Group</h1>
-          <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
-        </div>
-        <NotificationBell<PendingRequest>
-          items={pendingRequests}
-          getKey={(req) => req.id}
-          renderItem={(req) => (
-            <>
-              <p style={{ margin: "0 0 8px", fontSize: 13, color: "#ccc", lineHeight: 1.4 }}>
-                <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
-                <strong>{req.action}</strong> "{req.expense.description}" — ₹
-                {(req.expense.amountPaise / 100).toFixed(2)}
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => respondToRequest(req.id, "approved")}
-                  style={{ flex: 1, background: "#16a34a", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-                >
-                  ✓ Approve
-                </button>
-                <button
-                  onClick={() => respondToRequest(req.id, "denied")}
-                  style={{ flex: 1, background: "#dc2626", color: "#fff", border: "none", padding: "6px 0", borderRadius: 4, fontSize: 12, cursor: "pointer" }}
-                >
-                  ✗ Deny
-                </button>
-              </div>
-            </>
-          )}
-        />
-      </div>
 
-      <h2>Members</h2>
-      <ul>
-        {members.map((m) => {
-          const ts = memberScores[m.userId];
-          const badge = ts ? scoreBadgeColor(ts.score) : null;
-          return (
-            <li key={m.userId} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <span>
-                {m.user.name || m.user.email}
-                {m.userId === currentUserId && (
-                  <span style={{ color: "#888", fontSize: 12, marginLeft: 6 }}>(me)</span>
-                )}
-              </span>
-              {ts && ts.totalSettlements > 0 && (
-                <span
-                  title={`${ts.label} — based on ${ts.totalSettlements} settlements`}
-                  style={{
-                    fontSize: 10,
-                    padding: "2px 6px",
-                    borderRadius: 4,
-                    background: badge!.bg,
-                    color: badge!.text,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {ts.score} · {ts.label}
-                </span>
-              )}
-              {ts && ts.totalSettlements === 0 && (
-                <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: "#1c1917", color: "#888" }}>
-                  New member
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      <button onClick={() => setShowAddMemberModal(true)}>Add member</button>
-
-      <button onClick={generateInvite} disabled={generatingInvite}>
-        {generatingInvite ? <Spinner /> : "Generate invite link"}
-      </button>
-
-      <button onClick={() => setShowPlaceholderModal(true)}>Add placeholder member</button>
-
-      <button onClick={openExpenseModal}>Add expense</button>
-      <button onClick={openStatementModal}>📊 Generate statement</button>
-      {summary && <GroupSummaryCards summary={summary} recurringTemplates={recurringTemplates} />}
-
-      <h2>Expenses</h2>
-      <GroupExpensesGrid
-        expenses={expenses}
-        currentUserId={currentUserId}
-        myPermissions={myPermissions}
-        deletingExpenseId={deletingExpenseId}
-        requestingPermissionId={requestingPermissionId}
-        onEdit={openEditModal}
-        onDelete={deleteExpense}
-        onRequestAccess={(expenseId) => requestEditPermission(expenseId, "edit")}
-      />
-
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 28 }}>
-        <h2 style={{ margin: 0 }}>Recurring expenses</h2>
-        <Link href={`/groups/${id}/recurring`} style={{ fontSize: 13, color: "#93c5fd" }}>
-          Manage →
-        </Link>
-      </div>
-
-      {recurringTemplates.length === 0 ? (
-        <p style={{ color: "#888", fontSize: 13.5 }}>No recurring templates yet.</p>
-      ) : (
-        <GroupRecurringGrid templates={recurringTemplates} />
-      )}
-
-      {/* Disputes to resolve — admin only. "Payer's claim" is what the person
-          who owed money says happened; "Payee's dispute" is what the person
-          who was supposed to receive it says instead. As admin, you're
-          deciding which claim to trust since cash payments have no independent proof. */}
-      {isAdmin && disputes.length > 0 && (
-        <div style={{ marginTop: 16, padding: 12, background: "#1a0a0a", border: "1px solid #7f1d1d", borderRadius: 8 }}>
-          <h3 style={{ margin: "0 0 4px", color: "#f87171" }}>
-            ⚠ Disputes to resolve ({disputes.length})
-          </h3>
-          <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "#888" }}>
-            As group admin, review both sides and decide which claim to trust.
-          </p>
-          {disputes.map((d) => (
-            <div key={d.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid #333" }}>
-              <p style={{ margin: "0 0 6px", fontSize: 14 }}>
-                <strong>{d.fromName}</strong> → <strong>{d.toName}</strong>: ₹{(d.amountPaise / 100).toFixed(2)}
-              </p>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                <div style={{ background: "#111", padding: 8, borderRadius: 6 }}>
-                  <p style={{ margin: "0 0 2px", fontSize: 11, color: "#888" }}>PAYER'S CLAIM</p>
-                  <p style={{ margin: "0 0 4px", fontSize: 10, color: "#666" }}>
-                    What {d.fromName} says they did
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12 }}>
-                    {d.paymentMethod === "cash" ? "Paid in cash" : "Paid via UPI"}
-                    {d.utrNumber && <><br />UTR: {d.utrNumber}</>}
-                  </p>
-                  {d.evidenceUrl && (
-                    <a href={d.evidenceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#60a5fa" }}>
-                      View screenshot →
-                    </a>
-                  )}
-                </div>
-                <div style={{ background: "#111", padding: 8, borderRadius: 6 }}>
-                  <p style={{ margin: "0 0 2px", fontSize: 11, color: "#888" }}>PAYEE'S DISPUTE</p>
-                  <p style={{ margin: "0 0 4px", fontSize: 10, color: "#666" }}>
-                    What {d.toName} says happened instead
-                  </p>
-                  <p style={{ margin: 0, fontSize: 12 }}>{d.disputeReason}</p>
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={() => arbitrate(d.id, "payer")}
-                  disabled={arbitratingId === d.id}
-                  style={{ fontSize: 12, background: "#14532d", color: "#86efac", border: "none", borderRadius: 4, padding: "6px 12px", cursor: "pointer" }}
-                >
-                  Resolve for payer
-                </button>
-                <button
-                  onClick={() => arbitrate(d.id, "payee")}
-                  disabled={arbitratingId === d.id}
-                  style={{ fontSize: 12, background: "#450a0a", color: "#fca5a5", border: "none", borderRadius: 4, padding: "6px 12px", cursor: "pointer" }}
-                >
-                  Resolve for payee
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showStatementModal && (
-        <Dialog
-          icon="📊"
-          iconColor="#2563eb"
-          title="Group statement"
-          onBackdropClick={() => setShowStatementModal(false)}
-          width={480}
-          footer={
-            <>
-              <DialogButton variant="secondary" onClick={() => setShowStatementModal(false)}>Close</DialogButton>
-              <DialogButton onClick={shareViaWhatsApp} disabled={!statementData}>📱 Share via WhatsApp</DialogButton>
-              <DialogButton onClick={emailStatement} disabled={!statementData || sendingEmail}>
-                {sendingEmail ? <Spinner /> : "📧 Email to all members"}
-              </DialogButton>
-            </>
-          }
-        >
-          <select value={statementPeriod} onChange={(e) => { setStatementPeriod(Number(e.target.value)); openStatementModal(); }}>
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
-          </select>
-
-          {loadingStatement && <Spinner />}
-
-          {statementData && !loadingStatement && (
-            <div style={{ fontSize: 13 }}>
-              <p>Total spent: ₹{(statementData.totalSpentPaise / 100).toFixed(2)} ({statementData.expenseCount} expenses)</p>
-              <p>Settlements: {statementData.settlementsConfirmed}/{statementData.settlementsInPeriod} confirmed</p>
-
-              <h4>Payment status</h4>
-              {statementData.settlements.length === 0 && <p style={{ color: "#888" }}>No settlement attempts this period.</p>}
-              {statementData.settlements.map((s: any, i: number) => {
-                const label =
-                  s.status === "both_confirmed" ? { text: "✓ Paid & confirmed", color: "#86efac" } :
-                  s.status === "payer_confirmed" ? { text: "⏳ Awaiting confirmation", color: "#fbbf24" } :
-                  s.status === "disputed" ? { text: "⚠ Disputed", color: "#f87171" } :
-                  { text: "✗ Not yet paid", color: "#f87171" };
-                return (
-                  <p key={i} style={{ margin: "4px 0" }}>
-                    {s.fromName} → {s.toName}: ₹{(s.amountPaise / 100).toFixed(2)} —{" "}
-                    <span style={{ color: label.color }}>{label.text}</span>
-                  </p>
-                );
-              })}
-
-              <h4>Still pending</h4>
-              {statementData.stillOwing.length === 0 && <p style={{ color: "#86efac" }}>Everyone is settled up ✓</p>}
-              {statementData.stillOwing.map((p: any, i: number) => (
-                <p key={i} style={{ color: "#f87171", margin: "4px 0" }}>
-                  {p.name}: ₹{(p.amountPaise / 100).toFixed(2)} still owed
+        <div className="group-header">
+          <div className="group-title-row">
+            <h1 className="text-gradient group-title">{groupName || "Group"}</h1>
+            <RefreshButton onRefresh={refreshAll} label="Refreshing your group" />
+          </div>
+          {/* <NotificationBell<PendingRequest>
+            items={pendingRequests}
+            getKey={(req) => req.id}
+            renderItem={(req) => (
+              <>
+                <p className="mb-2 text-[13px] leading-snug text-zinc-600 dark:text-zinc-300">
+                  <strong>{req.requestedBy.name || req.requestedBy.email}</strong> wants to{" "}
+                  <strong>{req.action}</strong> "{req.expense.description}" — ₹
+                  {(req.expense.amountPaise / 100).toFixed(2)}
                 </p>
-              ))}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => respondToRequest(req.id, "approved")}
+                    className="flex-1 rounded-md bg-emerald-600 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+                  >
+                    ✓ Approve
+                  </button>
+                  <button
+                    onClick={() => respondToRequest(req.id, "denied")}
+                    className="flex-1 rounded-md bg-red-600 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-500"
+                  >
+                    ✗ Deny
+                  </button>
+                </div>
+              </>
+            )}
+          /> */}
+        </div>
 
-              <h4>Balances</h4>
-              {statementData.currentBalances.map((b: any, i: number) => (
-                <p key={i} style={{ color: b.amountPaise >= 0 ? "#86efac" : "#f87171" }}>
-                  {b.name}: {b.amountPaise >= 0 ? "is owed" : "owes"} ₹{(Math.abs(b.amountPaise) / 100).toFixed(2)}
-                </p>
-              ))}
-            </div>
+        {!isOnline && (
+          <div className="group-banner offline">
+            📡 You're offline — new expenses will be saved locally and synced automatically once you're back online.
+          </div>
+        )}
+        {isOnline && queuedCount > 0 && (
+          <div className="group-banner syncing">
+            {syncing ? "🔄 Syncing queued expenses..." : `🔄 ${queuedCount} queued expense(s) waiting to sync`}
+          </div>
+        )}
+
+        <div className="group-toolbar">
+          <button className="group-action-btn" onClick={() => setShowAddMemberModal(true)}>
+            Add member
+          </button>
+          <button className="group-action-btn" onClick={generateInvite} disabled={generatingInvite}>
+            {generatingInvite ? <Spinner /> : "Generate invite link"}
+          </button>
+          <button className="group-action-btn" onClick={() => setShowPlaceholderModal(true)}>
+            Add placeholder member
+          </button>
+          <button className="group-action-btn primary" onClick={openExpenseModal}>
+            Add expense
+          </button>
+          <button className="group-action-btn" onClick={openStatementModal}>
+            📊 Generate statement
+          </button>
+        </div>
+
+        <div className="group-section" style={{ marginTop: 0 }}>
+  <p className="group-section-label">Members</p>
+  <div className="group-members-grid">
+    {members.map((m) => {
+      const ts = memberScores[m.userId];
+      const badge = ts ? scoreBadgeColor(ts.score) : null;
+      return (
+        <div key={m.userId} className="group-member-card">
+          <span className="group-member-avatar">
+            {(m.user.name || m.user.email || "?")[0].toUpperCase()}
+          </span>
+          <span className="group-member-name">
+            {m.user.name || m.user.email}
+            {m.userId === currentUserId && <span className="group-member-me-tag">(me)</span>}
+          </span>
+          {ts && ts.totalSettlements > 0 && (
+            <span
+              title={`${ts.label} — based on ${ts.totalSettlements} settlements`}
+              className="group-trust-badge"
+              style={{ background: badge!.bg, color: badge!.text }}
+            >
+              {ts.score} · {ts.label}
+            </span>
           )}
-        </Dialog>
-      )}
+          {ts && ts.totalSettlements === 0 && (
+            <span className="group-trust-badge" style={{ background: "#e4e4e7", color: "#71717a" }}>
+              New member
+            </span>
+          )}
+        </div>
+      );
+    })}
+  </div>
+</div>
 
-      {showAddMemberModal && (
-        <Dialog
-          icon="＋"
-          iconColor="#2563eb"
-          title="Add member"
-          onBackdropClick={closeAddMemberModal}
-          footer={
-            <>
-              <DialogButton variant="secondary" onClick={closeAddMemberModal} disabled={addingMember}>
-                Cancel
-              </DialogButton>
-              <DialogButton onClick={addMember} disabled={!memberEmail || addingMember}>
-                {addingMember ? <Spinner /> : "OK"}
-              </DialogButton>
-            </>
-          }
-        >
-          <input
-            placeholder="Member's email"
-            value={memberEmail}
-            onChange={(e) => setMemberEmail(e.target.value)}
-            style={{ width: "100%" }}
-            autoFocus
-          />
-          {memberError && <p style={{ color: "red", fontSize: 12, margin: 0 }}>{memberError}</p>}
-        </Dialog>
-      )}
+        {summary && (
+          <div className="group-section">
+            <GroupSummaryCards summary={summary} recurringTemplates={recurringTemplates} />
+          </div>
+        )}
 
-      {showPlaceholderModal && (
-        <Dialog
-          icon="＋"
-          iconColor="#6b7280"
-          title="Add placeholder member"
-          onBackdropClick={closePlaceholderModal}
-          footer={
-            <>
-              <DialogButton variant="secondary" onClick={closePlaceholderModal} disabled={addingPlaceholder}>
-                Cancel
-              </DialogButton>
-              <DialogButton onClick={addPlaceholder} disabled={!placeholderName || addingPlaceholder}>
-                {addingPlaceholder ? <Spinner /> : "OK"}
-              </DialogButton>
-            </>
-          }
-        >
-          <input
-            placeholder="Name (required)"
-            value={placeholderName}
-            onChange={(e) => setPlaceholderName(e.target.value)}
-            style={{ width: "100%" }}
-            autoFocus
+        <div className="group-section">
+          <p className="group-section-label">Expenses</p>
+          <GroupExpensesGrid
+            expenses={expenses}
+            currentUserId={currentUserId}
+            myPermissions={myPermissions}
+            deletingExpenseId={deletingExpenseId}
+            requestingPermissionId={requestingPermissionId}
+            onEdit={openEditModal}
+            onDelete={deleteExpense}
+            onRequestAccess={(expenseId) => requestEditPermission(expenseId, "edit")}
           />
-          <input
-            placeholder="Phone (optional)"
-            value={placeholderPhone}
-            onChange={(e) => setPlaceholderPhone(e.target.value)}
-            style={{ width: "100%" }}
-          />
-          <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
-            No app required — included in splits but can't log in.
-          </p>
-        </Dialog>
-      )}
+        </div>
 
-      {showInviteModal && inviteLink && (
-        <Dialog
-          icon="🔗"
-          iconColor="#16a34a"
-          title="Invite link"
-          onBackdropClick={closeInviteModal}
-          footer={<DialogButton onClick={closeInviteModal}>OK</DialogButton>}
-        >
-          <input value={inviteLink} readOnly style={{ width: "100%" }} />
-          <DialogButton variant="secondary" onClick={() => navigator.clipboard.writeText(inviteLink)}>
-            Copy link
-          </DialogButton>
-          <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
-            Valid 7 days — share via WhatsApp or copy.
-          </p>
-        </Dialog>
-      )}
+        <div className="group-section">
+          <div className="group-section-header-row">
+            <p className="group-section-label" style={{ marginBottom: 0 }}>Recurring expenses</p>
+            <Link href={`/groups/${id}/recurring`} className="group-section-link">
+              Manage →
+            </Link>
+          </div>
 
-      {showExpenseModal && (
-        <Dialog
-          icon="₹"
-          iconColor="#2563eb"
-          title="Add expense"
-          onBackdropClick={closeExpenseModal}
-          width={440}
-          footer={
-            <>
-              <DialogButton variant="secondary" onClick={closeExpenseModal} disabled={addingExpense}>
-                Cancel
-              </DialogButton>
-              <DialogButton onClick={() => addExpense(false, false)} disabled={!description.trim() || !amount || addingExpense}>
-                {addingExpense ? <Spinner /> : "Add"}
-              </DialogButton>
-            </>
-          }
-        >
-          <input
-            placeholder="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ width: "100%" }}
-            autoFocus
-          />
-          <input
-            placeholder="Amount (₹)"
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            style={{ width: "100%" }}
-          />
+          {recurringTemplates.length === 0 ? (
+            <div className="group-card">
+              <p style={{ color: "#71717a", fontSize: 13.5, margin: 0 }}>No recurring templates yet.</p>
+            </div>
+          ) : (
+            <GroupRecurringGrid templates={recurringTemplates} />
+          )}
+        </div>
 
-          <label style={{ fontSize: 12, color: "#888" }}>Paid by</label>
-          <select value={paidById} onChange={(e) => setPaidById(e.target.value)} style={{ width: "100%" }}>
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.user.name || m.user.email}{m.userId === currentUserId ? " (me)" : ""}
-              </option>
+        {isAdmin && disputes.length > 0 && (
+          <div className="group-disputes-card">
+            <h3 className="group-disputes-title">⚠ Disputes to resolve ({disputes.length})</h3>
+            <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "#71717a" }}>
+              As group admin, review both sides and decide which claim to trust.
+            </p>
+            {disputes.map((d) => (
+              <div key={d.id} style={{ marginBottom: 14, paddingBottom: 14, borderBottom: "1px solid rgba(127,29,29,0.2)" }}>
+                <p style={{ margin: "0 0 6px", fontSize: 14 }}>
+                  <strong>{d.fromName}</strong> → <strong>{d.toName}</strong>: ₹{(d.amountPaise / 100).toFixed(2)}
+                </p>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+                  <div className="group-card" style={{ padding: 10 }}>
+                    <p style={{ margin: "0 0 2px", fontSize: 11, color: "#71717a" }}>PAYER'S CLAIM</p>
+                    <p style={{ margin: "0 0 4px", fontSize: 10, color: "#a1a1aa" }}>What {d.fromName} says they did</p>
+                    <p style={{ margin: 0, fontSize: 12 }}>
+                      {d.paymentMethod === "cash" ? "Paid in cash" : "Paid via UPI"}
+                      {d.utrNumber && <><br />UTR: {d.utrNumber}</>}
+                    </p>
+                    {d.evidenceUrl && (
+                      <a href={d.evidenceUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#4f46e5" }}>
+                        View screenshot →
+                      </a>
+                    )}
+                  </div>
+                  <div className="group-card" style={{ padding: 10 }}>
+                    <p style={{ margin: "0 0 2px", fontSize: 11, color: "#71717a" }}>PAYEE'S DISPUTE</p>
+                    <p style={{ margin: "0 0 4px", fontSize: 10, color: "#a1a1aa" }}>What {d.toName} says happened instead</p>
+                    <p style={{ margin: 0, fontSize: 12 }}>{d.disputeReason}</p>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => arbitrate(d.id, "payer")} disabled={arbitratingId === d.id} className="group-action-btn" style={{ color: "#16a34a" }}>
+                    Resolve for payer
+                  </button>
+                  <button onClick={() => arbitrate(d.id, "payee")} disabled={arbitratingId === d.id} className="group-action-btn" style={{ color: "#dc2626" }}>
+                    Resolve for payee
+                  </button>
+                </div>
+              </div>
             ))}
-          </select>
+          </div>
+        )}
 
-          <label style={{ fontSize: 12, color: "#888" }}>Split method</label>
-          <select value={expenseSplitType} onChange={(e) => setExpenseSplitType(e.target.value)} style={{ width: "100%" }}>
-            <option value="EQUAL">Split equally</option>
-            <option value="EXACT">Exact amounts</option>
-            <option value="PERCENTAGE">By percentage</option>
-            <option value="SHARES">By shares</option>
-          </select>
-
-          {expenseSplitType === "EXACT" && (
-            <div>
-              <p style={{ fontSize: 12, color: "#888" }}>Enter how much each person owes exactly:</p>
-              {members.map((m) => (
-                <div key={m.userId} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <label style={{ flex: 1 }}>{m.user.name || m.user.email}: ₹</label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={exactInputs[m.userId] || ""}
-                    onChange={(e) => setExactInputs({ ...exactInputs, [m.userId]: e.target.value })}
-                    style={{ width: 90 }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {expenseSplitType === "PERCENTAGE" && (
-            <div>
-              <p style={{ fontSize: 12, color: "#888" }}>Enter % each person owes (must total 100%):</p>
-              {members.map((m) => (
-                <div key={m.userId} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <label style={{ flex: 1 }}>{m.user.name || m.user.email}: </label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={percentInputs[m.userId] || ""}
-                    onChange={(e) => setPercentInputs({ ...percentInputs, [m.userId]: e.target.value })}
-                    style={{ width: 70 }}
-                  />
-                  <span>%</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {expenseSplitType === "SHARES" && (
-            <div>
-              <p style={{ fontSize: 12, color: "#888" }}>Enter share units (e.g. meals eaten):</p>
-              {members.map((m) => (
-                <div key={m.userId} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                  <label style={{ flex: 1 }}>{m.user.name || m.user.email}: </label>
-                  <input
-                    type="number"
-                    placeholder="0"
-                    value={shareInputs[m.userId] || ""}
-                    onChange={(e) => setShareInputs({ ...shareInputs, [m.userId]: e.target.value })}
-                    style={{ width: 70 }}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {error && <p style={{ color: "red", fontSize: 12, margin: 0 }}>{error}</p>}
-        </Dialog>
-      )}
-
-      {editingExpense && (
-        <Dialog
-          icon="✎"
-          iconColor="#2563eb"
-          title="Edit expense"
-          onBackdropClick={() => !savingEdit && setEditingExpense(null)}
-          footer={
-            <>
-              <DialogButton variant="secondary" onClick={() => setEditingExpense(null)} disabled={savingEdit}>
-                Cancel
-              </DialogButton>
-              <DialogButton onClick={() => saveEditExpense(editingExpense)} disabled={savingEdit}>
-                {savingEdit ? <Spinner /> : "Save"}
-              </DialogButton>
-            </>
-          }
-        >
-          <input
-            value={editDesc}
-            onChange={(ev) => setEditDesc(ev.target.value)}
-            placeholder="Description"
-            style={{ width: "100%" }}
-          />
-          <input
-            type="number"
-            value={editAmount}
-            onChange={(ev) => setEditAmount(ev.target.value)}
-            placeholder="Amount (₹)"
-            style={{ width: "100%" }}
-          />
-          <select
-            value={editPaidById}
-            onChange={(ev) => setEditPaidById(ev.target.value)}
-            style={{ width: "100%" }}
+        {showStatementModal && (
+          <Dialog
+            icon="📊"
+            iconColor="#2563eb"
+            title="Group statement"
+            onBackdropClick={() => setShowStatementModal(false)}
+            width={480}
+            footer={
+              <>
+                <DialogButton variant="secondary" onClick={() => setShowStatementModal(false)}>Close</DialogButton>
+                <DialogButton onClick={shareViaWhatsApp} disabled={!statementData}>📱 Share via WhatsApp</DialogButton>
+                <DialogButton onClick={emailStatement} disabled={!statementData || sendingEmail}>
+                  {sendingEmail ? <Spinner /> : "📧 Email to all members"}
+                </DialogButton>
+              </>
+            }
           >
-            {members.map((m) => (
-              <option key={m.userId} value={m.userId}>
-                {m.user.name || m.user.email}
-              </option>
-            ))}
-          </select>
-        </Dialog>
-      )}
+            <select value={statementPeriod} onChange={(e) => { setStatementPeriod(Number(e.target.value)); openStatementModal(); }}>
+              <option value={7}>Last 7 days</option>
+              <option value={30}>Last 30 days</option>
+              <option value={90}>Last 90 days</option>
+            </select>
+
+            {loadingStatement && <Spinner />}
+
+            {statementData && !loadingStatement && (
+              <div style={{ fontSize: 13 }}>
+                <p>Total spent: ₹{(statementData.totalSpentPaise / 100).toFixed(2)} ({statementData.expenseCount} expenses)</p>
+                <p>Settlements: {statementData.settlementsConfirmed}/{statementData.settlementsInPeriod} confirmed</p>
+
+                <h4>Payment status</h4>
+                {statementData.settlements.length === 0 && <p style={{ color: "#888" }}>No settlement attempts this period.</p>}
+                {statementData.settlements.map((s: any, i: number) => {
+                  const label =
+                    s.status === "both_confirmed" ? { text: "✓ Paid & confirmed", color: "#86efac" } :
+                    s.status === "payer_confirmed" ? { text: "⏳ Awaiting confirmation", color: "#fbbf24" } :
+                    s.status === "disputed" ? { text: "⚠ Disputed", color: "#f87171" } :
+                    { text: "✗ Not yet paid", color: "#f87171" };
+                  return (
+                    <p key={i} style={{ margin: "4px 0" }}>
+                      {s.fromName} → {s.toName}: ₹{(s.amountPaise / 100).toFixed(2)} — <span style={{ color: label.color }}>{label.text}</span>
+                    </p>
+                  );
+                })}
+
+                <h4>Still pending</h4>
+                {statementData.stillOwing.length === 0 && <p style={{ color: "#86efac" }}>Everyone is settled up ✓</p>}
+                {statementData.stillOwing.map((p: any, i: number) => (
+                  <p key={i} style={{ color: "#f87171", margin: "4px 0" }}>
+                    {p.name}: ₹{(p.amountPaise / 100).toFixed(2)} still owed
+                  </p>
+                ))}
+
+                <h4>Balances</h4>
+                {statementData.currentBalances.map((b: any, i: number) => (
+                  <p key={i} style={{ color: b.amountPaise >= 0 ? "#86efac" : "#f87171" }}>
+                    {b.name}: {b.amountPaise >= 0 ? "is owed" : "owes"} ₹{(Math.abs(b.amountPaise) / 100).toFixed(2)}
+                  </p>
+                ))}
+              </div>
+            )}
+          </Dialog>
+        )}
+
+        {showAddMemberModal && (
+          <Dialog
+            icon="+"
+            iconColor="#2563eb"
+            title="Add member"
+            onBackdropClick={closeAddMemberModal}
+            footer={
+              <>
+                <DialogButton variant="secondary" onClick={closeAddMemberModal} disabled={addingMember}>Cancel</DialogButton>
+                <DialogButton onClick={addMember} disabled={!memberEmail || addingMember}>
+                  {addingMember ? <Spinner /> : "OK"}
+                </DialogButton>
+              </>
+            }
+          >
+            <input placeholder="Member's email" value={memberEmail} onChange={(e) => setMemberEmail(e.target.value)} style={{ width: "100%" }} autoFocus />
+            {memberError && <p style={{ color: "red", fontSize: 12, margin: 0 }}>{memberError}</p>}
+          </Dialog>
+        )}
+
+        {showPlaceholderModal && (
+          <Dialog
+            icon="+"
+            iconColor="#6b7280"
+            title="Add placeholder member"
+            onBackdropClick={closePlaceholderModal}
+            footer={
+              <>
+                <DialogButton variant="secondary" onClick={closePlaceholderModal} disabled={addingPlaceholder}>Cancel</DialogButton>
+                <DialogButton onClick={addPlaceholder} disabled={!placeholderName || addingPlaceholder}>
+                  {addingPlaceholder ? <Spinner /> : "OK"}
+                </DialogButton>
+              </>
+            }
+          >
+            <input placeholder="Name (required)" value={placeholderName} onChange={(e) => setPlaceholderName(e.target.value)} style={{ width: "100%" }} autoFocus />
+            <input placeholder="Phone (optional)" value={placeholderPhone} onChange={(e) => setPlaceholderPhone(e.target.value)} style={{ width: "100%" }} />
+            <p style={{ fontSize: 12, color: "#888", margin: 0 }}>No app required — included in splits but can't log in.</p>
+          </Dialog>
+        )}
+
+        {showInviteModal && inviteLink && (
+          <Dialog
+            icon="🔗"
+            iconColor="#16a34a"
+            title="Invite link"
+            onBackdropClick={closeInviteModal}
+            footer={<DialogButton onClick={closeInviteModal}>OK</DialogButton>}
+          >
+            <input value={inviteLink} readOnly style={{ width: "100%" }} />
+            <DialogButton variant="secondary" onClick={() => navigator.clipboard.writeText(inviteLink)}>Copy link</DialogButton>
+            <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Valid 7 days — share via WhatsApp or copy.</p>
+          </Dialog>
+        )}
+
+        {showExpenseModal && (
+          <Dialog
+            icon="₹"
+            iconColor="#2563eb"
+            title="Add expense"
+            onBackdropClick={closeExpenseModal}
+            width={440}
+            footer={
+              <>
+                <DialogButton variant="secondary" onClick={closeExpenseModal} disabled={addingExpense}>Cancel</DialogButton>
+                <DialogButton onClick={() => addExpense(false, false)} disabled={!description.trim() || !amount || addingExpense}>
+                  {addingExpense ? <Spinner /> : "Add"}
+                </DialogButton>
+              </>
+            }
+          >
+            <input placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: "100%" }} autoFocus />
+            <input placeholder="Amount (₹)" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: "100%" }} />
+
+            <label style={{ fontSize: 12, color: "#888" }}>Paid by</label>
+            <select value={paidById} onChange={(e) => setPaidById(e.target.value)} style={{ width: "100%" }}>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.user.name || m.user.email}{m.userId === currentUserId ? " (me)" : ""}
+                </option>
+              ))}
+            </select>
+
+            <label style={{ fontSize: 12, color: "#888" }}>Split method</label>
+            <select value={expenseSplitType} onChange={(e) => setExpenseSplitType(e.target.value)} style={{ width: "100%" }}>
+              <option value="EQUAL">Split equally</option>
+              <option value="EXACT">Exact amounts</option>
+              <option value="PERCENTAGE">By percentage</option>
+              <option value="SHARES">By shares</option>
+            </select>
+
+            {expenseSplitType === "EXACT" && (
+              <div>
+                <p style={{ fontSize: 12, color: "#888" }}>Enter how much each person owes exactly:</p>
+                {members.map((m) => (
+                  <div key={m.userId} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <label style={{ flex: 1 }}>{m.user.name || m.user.email}: ₹</label>
+                    <input type="number" placeholder="0" value={exactInputs[m.userId] || ""} onChange={(e) => setExactInputs({ ...exactInputs, [m.userId]: e.target.value })} style={{ width: 90 }} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {expenseSplitType === "PERCENTAGE" && (
+              <div>
+                <p style={{ fontSize: 12, color: "#888" }}>Enter % each person owes (must total 100%):</p>
+                {members.map((m) => (
+                  <div key={m.userId} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <label style={{ flex: 1 }}>{m.user.name || m.user.email}: </label>
+                    <input type="number" placeholder="0" value={percentInputs[m.userId] || ""} onChange={(e) => setPercentInputs({ ...percentInputs, [m.userId]: e.target.value })} style={{ width: 70 }} />
+                    <span>%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {expenseSplitType === "SHARES" && (
+              <div>
+                <p style={{ fontSize: 12, color: "#888" }}>Enter share units (e.g. meals eaten):</p>
+                {members.map((m) => (
+                  <div key={m.userId} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                    <label style={{ flex: 1 }}>{m.user.name || m.user.email}: </label>
+                    <input type="number" placeholder="0" value={shareInputs[m.userId] || ""} onChange={(e) => setShareInputs({ ...shareInputs, [m.userId]: e.target.value })} style={{ width: 70 }} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {error && <p style={{ color: "red", fontSize: 12, margin: 0 }}>{error}</p>}
+          </Dialog>
+        )}
+
+        {editingExpense && (
+          <Dialog
+            icon="✎"
+            iconColor="#2563eb"
+            title="Edit expense"
+            onBackdropClick={() => !savingEdit && setEditingExpense(null)}
+            footer={
+              <>
+                <DialogButton variant="secondary" onClick={() => setEditingExpense(null)} disabled={savingEdit}>Cancel</DialogButton>
+                <DialogButton onClick={() => saveEditExpense(editingExpense)} disabled={savingEdit}>
+                  {savingEdit ? <Spinner /> : "Save"}
+                </DialogButton>
+              </>
+            }
+          >
+            <input value={editDesc} onChange={(ev) => setEditDesc(ev.target.value)} placeholder="Description" style={{ width: "100%" }} />
+            <input type="number" value={editAmount} onChange={(ev) => setEditAmount(ev.target.value)} placeholder="Amount (₹)" style={{ width: "100%" }} />
+            <select value={editPaidById} onChange={(ev) => setEditPaidById(ev.target.value)} style={{ width: "100%" }}>
+              {members.map((m) => (
+                <option key={m.userId} value={m.userId}>{m.user.name || m.user.email}</option>
+              ))}
+            </select>
+          </Dialog>
+        )}
+      </div>
     </div>
   );
 }
