@@ -204,3 +204,63 @@
   color: #a5b4fc;
   background: rgba(99, 102, 241, 0.12);
 }
+
+/* ---------- Refresh button ---------- */
+
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  border: none;
+  background: #f4f4f5;
+  color: #52525b;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: linear-gradient(to bottom right, #4f46e5, #0ea5e9);
+  color: #ffffff;
+  transform: scale(1.06);
+}
+
+.refresh-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
+  transform: none;
+}
+
+.dark .refresh-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d4d4d8;
+}
+
+.dark .refresh-btn:hover:not(:disabled) {
+  background: #ffffff;
+  color: #000000;
+}
+
+.refresh-btn-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.refresh-btn-icon.spinning {
+  animation: refresh-spin 0.6s linear infinite;
+}
+
+@keyframes refresh-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
