@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { SidebarExtraItem } from "@/components/app-shell/AppShellContext";
+import type { SidebarSection } from "@/components/app-shell/AppShellContext";
 
 const NAV_ITEMS = [
   {
@@ -41,7 +41,8 @@ const NAV_ITEMS = [
     ),
   },
 ];
-export default function Sidebar({ extraItems = [] }: { extraItems?: SidebarExtraItem[] }) {
+
+export default function Sidebar({ section }: { section?: SidebarSection }) {
   const pathname = usePathname();
 
   return (
@@ -51,8 +52,18 @@ export default function Sidebar({ extraItems = [] }: { extraItems?: SidebarExtra
         {NAV_ITEMS.map((item) => {
           const active = pathname === item.href;
           return (
-            <Link key={item.href} href={item.href} className={`dash-sidebar-item${active ? " active" : ""}`}>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`dash-sidebar-item${active ? " active" : ""}`}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
                 {item.icon}
               </svg>
               <span>{item.label}</span>
@@ -61,27 +72,27 @@ export default function Sidebar({ extraItems = [] }: { extraItems?: SidebarExtra
         })}
       </nav>
 
-      {extraItems.length > 0 && (
-        <>
-          <p className="dash-sidebar-label" style={{ marginTop: "1.25rem" }}>
-            This group
-          </p>
-          <nav className="dash-sidebar-nav">
-            {extraItems.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`dash-sidebar-item${active ? " active" : ""}`}
-                >
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        </>
-      )}
+    {section && section.items.length > 0 && (
+  <>
+    <p className="dash-sidebar-section-label" style={{ marginTop: "1.25rem" }}>
+      {section.label}
+    </p>
+    <nav className="dash-sidebar-nav">
+      {section.items.map((item) => {
+        const active = pathname === item.href;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`dash-sidebar-item${active ? " active" : ""}`}
+          >
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  </>
+)}
     </aside>
   );
 }

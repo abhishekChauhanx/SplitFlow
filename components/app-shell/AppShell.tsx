@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardTopBar from "@/components/dashboard/DashboardTopBar";
-import { AppShellContext, SidebarExtraItem } from "./AppShellContext";
+import { AppShellContext, SidebarSection } from "./AppShellContext";
 import "@/components/dashboard/dashboard-shell.css";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -11,7 +11,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const [extraSidebarItems, setExtraSidebarItems] = useState<SidebarExtraItem[]>([]);
+  const [sidebarSection, setSidebarSection] = useState<SidebarSection>(null);
   const infoHandlerRef = useRef<(() => void) | null>(null);
 
   const registerInfoHandler = useCallback((fn: (() => void) | null) => {
@@ -67,8 +67,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         pendingRequests,
         refreshPendingRequests,
         registerInfoHandler,
-        extraSidebarItems,
-        setExtraSidebarItems,
+        sidebarSection,
+        setSidebarSection,
       }}
     >
       <div className="dash-shell">
@@ -82,7 +82,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           onSearchChange={setSearch}
         />
         <div className="dash-shell-body">
-          <Sidebar extraItems={extraSidebarItems} />
+          <Sidebar section={sidebarSection} />
           <main className="dash-main">{children}</main>
         </div>
       </div>

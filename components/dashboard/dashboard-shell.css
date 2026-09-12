@@ -182,3 +182,25 @@
   min-width: 0;
   overflow-x: hidden;
 }
+
+/* ---------- Sidebar: group/section highlight ---------- */
+
+.dash-sidebar-section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #4338ca;
+  background: #eef2ff;
+}
+
+.dark .dash-sidebar-section-label {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.12);
+}
