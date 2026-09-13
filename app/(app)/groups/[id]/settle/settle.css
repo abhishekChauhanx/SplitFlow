@@ -1,0 +1,1012 @@
+/* Settle up page — same tokens as group.css / balances.css */
+
+.settle-page {
+  position: relative;
+}
+
+.settle-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settle-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 0.5rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  color: #52525b;
+  text-decoration: none;
+  font-size: 16px;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+
+.settle-back-btn:hover {
+  background: #f4f4f5;
+}
+
+.dark .settle-back-btn {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  color: #d4d4d8;
+}
+
+.dark .settle-back-btn:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.settle-title {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #18181b;
+}
+
+.dark .settle-title {
+  color: #ffffff;
+}
+
+@media (min-width: 640px) {
+  .settle-title {
+    font-size: 1.875rem;
+  }
+}
+
+.settle-breadcrumb {
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.settle-breadcrumb a {
+  color: #a1a1aa;
+}
+
+.settle-breadcrumb a:hover {
+  color: #52525b;
+}
+
+.dark .settle-breadcrumb a:hover {
+  color: #d4d4d8;
+}
+
+.settle-breadcrumb .sep {
+  color: #d4d4d8;
+  margin: 0 0.375rem;
+}
+
+/* ---------- Recurring card ---------- */
+
+.settle-card {
+  margin-top: 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid #e4e4e7;
+  background: #fafafa;
+  padding: 1rem 1.25rem;
+}
+
+.dark .settle-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.settle-card-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+}
+
+.settle-recurring-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0;
+}
+
+.settle-recurring-row .name {
+  color: #18181b;
+}
+
+.dark .settle-recurring-row .name {
+  color: #ffffff;
+}
+
+.settle-recurring-row .meta {
+  color: #71717a;
+}
+
+/* ---------- Empty state ---------- */
+
+.settle-empty {
+  margin-top: 1.25rem;
+  padding: 1.75rem 1rem;
+  text-align: center;
+  border-radius: 1rem;
+  border: 1px dashed #d4d4d8;
+  color: #16a34a;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.dark .settle-empty {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #4ade80;
+}
+
+/* ---------- Suggestion rows ---------- */
+
+.settle-suggestions {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.settle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.875rem 1.125rem;
+  border-radius: 1rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settle-row:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+}
+
+.dark .settle-row {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #18181b;
+}
+
+.settle-row-label {
+  min-width: 0;
+}
+
+.settle-row-sub {
+  font-size: 0.75rem;
+  color: #a1a1aa;
+  margin-bottom: 0.125rem;
+}
+
+.settle-row-name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #18181b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark .settle-row-name {
+  color: #ffffff;
+}
+
+.settle-row-warning {
+  font-size: 0.6875rem;
+  color: #d97706;
+  margin-top: 0.1875rem;
+}
+
+.dark .settle-row-warning {
+  color: #fbbf24;
+}
+
+.settle-remind-btn {
+  display: block;
+  margin-top: 0.375rem;
+  background: transparent;
+  border: none;
+  color: #d97706;
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dark .settle-remind-btn {
+  color: #fbbf24;
+}
+
+.settle-remind-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.settle-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.settle-row-amount {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: #18181b;
+}
+
+.dark .settle-row-amount {
+  color: #ffffff;
+}
+
+.settle-pending-badge {
+  font-size: 0.6875rem;
+  color: #a1a1aa;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  white-space: nowrap;
+}
+
+.dark .settle-pending-badge {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.settle-pay-btn {
+  background: linear-gradient(to right, #4f46e5, #0ea5e9);
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.4375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dark .settle-pay-btn {
+  background: #ffffff;
+  color: #000000;
+}
+
+.settle-view-btn {
+  background: transparent;
+  color: #4f46e5;
+  border: 1px solid #4f46e5;
+  border-radius: 0.5rem;
+  padding: 0.4375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dark .settle-view-btn {
+  color: #a5b4fc;
+  border-color: #a5b4fc;
+}
+
+/* ---------- Modal overlay / dialog (shared shape) ---------- */
+
+.settle-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2800;
+  padding: 1rem;
+}
+
+.settle-modal {
+  width: min(400px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid #e4e4e7;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.15);
+  background: #ffffff;
+}
+
+.dark .settle-modal {
+  border-color: #2a2a2a;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.6);
+  background: #161616;
+}
+
+.settle-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.125rem;
+  background: #fafafa;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.dark .settle-modal-header {
+  background: linear-gradient(180deg, #232323 0%, #1a1a1a 100%);
+  border-color: #2a2a2a;
+}
+
+.settle-modal-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #18181b;
+}
+
+.dark .settle-modal-title {
+  color: #eee;
+}
+
+.settle-modal-close {
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  font-size: 1.125rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.settle-modal-body {
+  padding: 1.125rem;
+}
+
+/* Amount block */
+
+.settle-amount-block {
+  text-align: center;
+  margin-bottom: 1.125rem;
+}
+
+.settle-amount-label {
+  font-size: 0.75rem;
+  color: #a1a1aa;
+  margin-bottom: 0.25rem;
+}
+
+.settle-amount-value {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #18181b;
+}
+
+.dark .settle-amount-value {
+  color: #eee;
+}
+
+.settle-partial-toggle {
+  background: transparent;
+  border: none;
+  color: #4f46e5;
+  font-size: 0.78125rem;
+  cursor: pointer;
+  margin-top: 0.375rem;
+  padding: 0;
+}
+
+.dark .settle-partial-toggle {
+  color: #a5b4fc;
+}
+
+.settle-partial-row {
+  margin-top: 0.625rem;
+  display: flex;
+  gap: 0.375rem;
+  justify-content: center;
+}
+
+.settle-partial-input {
+  width: 160px;
+  text-align: center;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  color: #18181b;
+  font-size: 0.875rem;
+}
+
+.dark .settle-partial-input {
+  background: #0f0f0f;
+  border-color: #333;
+  color: #eee;
+}
+
+.settle-partial-full-btn {
+  background: transparent;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.375rem;
+  color: #52525b;
+  font-size: 0.78125rem;
+  padding: 0 0.625rem;
+  cursor: pointer;
+}
+
+.dark .settle-partial-full-btn {
+  border-color: #444;
+  color: #ccc;
+}
+
+/* Method toggle */
+
+.settle-method-toggle {
+  display: flex;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+.settle-method-btn {
+  flex: 1;
+  padding: 0.5625rem 0;
+  border-radius: 0.5rem;
+  border: 1px solid #e4e4e7;
+  background: transparent;
+  color: #71717a;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.settle-method-btn.active {
+  border-color: #4f46e5;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.dark .settle-method-btn {
+  border-color: #333;
+  color: #999;
+}
+
+.dark .settle-method-btn.active {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+}
+
+/* QR block */
+
+.settle-qr-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 1rem;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.dark .settle-qr-block {
+  background: #0f0f0f;
+  border-color: #2a2a2a;
+}
+
+.settle-qr-image {
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.5rem;
+}
+
+.settle-qr-placeholder {
+  width: 168px;
+  height: 168px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settle-upi-link {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #4f46e5;
+  text-decoration: none;
+  border: 1px solid #4f46e5;
+  border-radius: 0.375rem;
+  padding: 0.4375rem 1rem;
+}
+
+.dark .settle-upi-link {
+  color: #a5b4fc;
+  border-color: #a5b4fc;
+}
+
+.settle-qr-note {
+  margin: 0;
+  font-size: 0.71875rem;
+  color: #a1a1aa;
+  text-align: center;
+}
+
+.settle-no-upi-note {
+  padding: 0.625rem 0.875rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 0.5rem;
+  color: #92400e;
+  font-size: 0.78125rem;
+  margin-bottom: 1rem;
+}
+
+.dark .settle-no-upi-note {
+  background: rgba(146, 64, 14, 0.15);
+  border-color: rgba(217, 119, 6, 0.3);
+  color: #fbbf24;
+}
+
+.settle-mark-paid-btn {
+  width: 100%;
+  background: linear-gradient(to right, #4f46e5, #0ea5e9);
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.75rem 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dark .settle-mark-paid-btn {
+  background: #ffffff;
+  color: #000000;
+}
+
+.settle-mark-paid-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.settle-view-only-note {
+  margin: 0;
+  text-align: center;
+  font-size: 0.78125rem;
+  color: #a1a1aa;
+}
+
+/* ---------- UTR dialog ---------- */
+
+.settle-utr-title {
+  margin: 0 0 0.375rem;
+  font-size: 0.9375rem;
+  color: #18181b;
+}
+
+.dark .settle-utr-title {
+  color: #eee;
+}
+
+.settle-utr-sub {
+  margin: 0 0 0.25rem;
+  font-size: 0.78125rem;
+  color: #71717a;
+}
+
+.settle-utr-hint {
+  font-size: 0.6875rem;
+  color: #a1a1aa;
+  margin: 0 0 0.75rem;
+}
+
+.settle-utr-input {
+  width: 100%;
+  font-family: monospace;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  color: #18181b;
+  font-size: 0.875rem;
+  box-sizing: border-box;
+}
+
+.dark .settle-utr-input {
+  background: #0f0f0f;
+  border-color: #333;
+  color: #eee;
+}
+
+.settle-utr-error {
+  color: #ef4444;
+  font-size: 0.75rem;
+  margin: 0.375rem 0 0;
+}
+
+.settle-utr-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.settle-utr-skip-btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.5rem;
+  color: #52525b;
+  font-size: 0.8125rem;
+  padding: 0.625rem 0;
+  cursor: pointer;
+}
+
+.dark .settle-utr-skip-btn {
+  border-color: #444;
+  color: #ccc;
+}
+
+.settle-utr-save-btn {
+  flex: 1;
+  background: linear-gradient(to right, #4f46e5, #0ea5e9);
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  padding: 0.625rem 0;
+  cursor: pointer;
+}
+
+.dark .settle-utr-save-btn {
+  background: #ffffff;
+  color: #000000;
+}
+
+.settle-utr-save-btn:disabled,
+.settle-utr-skip-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* ---------- History section ---------- */
+
+.settle-section-label {
+  margin: 2rem 0 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+}
+
+.settle-history-empty {
+  color: #a1a1aa;
+  font-size: 0.84375rem;
+}
+
+.settle-history-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .settle-history-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .settle-history-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.settle-history-card {
+  border: 1px solid #e4e4e7;
+  border-radius: 0.75rem;
+  padding: 0.875rem;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dark .settle-history-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #18181b;
+}
+
+.settle-history-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.settle-history-names {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: #18181b;
+  word-break: break-word;
+}
+
+.dark .settle-history-names {
+  color: #ffffff;
+}
+
+.settle-history-amount {
+  margin-left: 0.5rem;
+  color: #71717a;
+  font-size: 0.8125rem;
+}
+
+.settle-history-badges {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.settle-badge {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-weight: 600;
+}
+
+.settle-badge.method-cash {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.dark .settle-badge.method-cash {
+  background: #451a03;
+  color: #fb923c;
+}
+
+.settle-badge.method-upi {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.dark .settle-badge.method-upi {
+  background: #172554;
+  color: #60a5fa;
+}
+
+.settle-badge.status-settled {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.dark .settle-badge.status-settled {
+  background: #14532d;
+  color: #86efac;
+}
+
+.settle-badge.status-disputed {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.dark .settle-badge.status-disputed {
+  background: #450a0a;
+  color: #fca5a5;
+}
+
+.settle-badge.status-pending {
+  background: #f4f4f5;
+  color: #52525b;
+}
+
+.dark .settle-badge.status-pending {
+  background: #1c1917;
+  color: #a8a29e;
+}
+
+.settle-utr-box {
+  padding: 0.375rem 0.625rem;
+  background: #eff6ff;
+  border-radius: 0.375rem;
+  border: 1px solid #bfdbfe;
+  font-size: 0.8125rem;
+  word-break: break-all;
+}
+
+.dark .settle-utr-box {
+  background: #0f2937;
+  border-color: #164e63;
+}
+
+.settle-utr-box .label {
+  color: #1d4ed8;
+  margin-right: 0.375rem;
+}
+
+.dark .settle-utr-box .label {
+  color: #7dd3fc;
+}
+
+.settle-utr-box code {
+  color: #1e3a8a;
+  letter-spacing: 1px;
+}
+
+.dark .settle-utr-box code {
+  color: #e0f2fe;
+}
+
+.settle-utr-box .saved-tag {
+  color: #0369a1;
+  font-size: 0.6875rem;
+  margin-left: 0.5rem;
+}
+
+.dark .settle-utr-box .saved-tag {
+  color: #0e7490;
+}
+
+.settle-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.settle-inline-hint {
+  font-size: 0.6875rem;
+  color: #a1a1aa;
+  margin: 0;
+}
+
+.settle-inline-row {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.settle-inline-input {
+  flex: 1;
+  min-width: 0;
+  font-family: monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.5rem;
+  background: #fafafa;
+  border: 1px solid #e4e4e7;
+  border-radius: 0.25rem;
+  color: #18181b;
+}
+
+.dark .settle-inline-input {
+  background: #0f0f0f;
+  border-color: #333;
+  color: #eee;
+}
+
+.settle-mini-btn {
+  font-size: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  color: #18181b;
+  cursor: pointer;
+}
+
+.dark .settle-mini-btn {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.03);
+  color: #ffffff;
+}
+
+.settle-mini-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.settle-mini-error {
+  color: #ef4444;
+  font-size: 0.6875rem;
+}
+
+.settle-mini-success {
+  color: #16a34a;
+  font-size: 0.6875rem;
+}
+
+.settle-dispute-box {
+  padding: 0.375rem 0.625rem;
+  background: #fef2f2;
+  border-radius: 0.375rem;
+  border: 1px solid #fecaca;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dark .settle-dispute-box {
+  background: #2a0a0a;
+  border-color: #7f1d1d;
+}
+
+.settle-dispute-reason {
+  color: #b91c1c;
+  font-size: 0.8125rem;
+}
+
+.dark .settle-dispute-reason {
+  color: #f87171;
+}
+
+.settle-dispute-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.settle-arbitration-box {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  background: #fafafa;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+}
+
+.dark .settle-arbitration-box {
+  background: #111;
+}
+
+.settle-arbitration-box .head {
+  margin: 0;
+  color: #4f46e5;
+}
+
+.dark .settle-arbitration-box .head {
+  color: #93c5fd;
+}
+
+.settle-arbitration-box .note {
+  margin: 0.25rem 0 0;
+  color: #71717a;
+}
+
+.settle-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding-top: 0.25rem;
+}
+
+.settle-waiting-text {
+  font-size: 0.8125rem;
+  color: #a8a29e;
+}
+
+.settle-not-received-btn {
+  background: transparent;
+  border: 1px solid #fecaca;
+  border-radius: 0.375rem;
+  color: #dc2626;
+  font-size: 0.75rem;
+  padding: 0.375rem 0.625rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dark .settle-not-received-btn {
+  border-color: #7f1d1d;
+  color: #fca5a5;
+}
+
+.settle-report-link {
+  background: transparent;
+  border: 0;
+  color: #ef4444;
+  font-size: 0.75rem;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  white-space: nowrap;
+}

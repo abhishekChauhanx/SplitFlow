@@ -436,3 +436,44 @@
   border-color: #444;
   color: #ccc;
 }
+
+/* ---------- Invite link copy button ---------- */
+
+.group-copy-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0;
+  border-radius: 0.5rem;
+  border: 1px solid #d4d4d8;
+  background: transparent;
+  color: #52525b;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.dark .group-copy-btn {
+  border-color: #444;
+  color: #ccc;
+}
+
+.group-copy-btn.copied {
+  border-color: #22c55e;
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.dark .group-copy-btn.copied {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+}
+
+.group-copy-btn svg {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
