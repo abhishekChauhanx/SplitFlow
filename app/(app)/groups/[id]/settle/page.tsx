@@ -106,15 +106,15 @@ export default function SettlePage() {
 
   // Keep the group's sidebar sub-nav visible while on this page too.
 useEffect(() => {
-  setSidebarSection({
-    label: groupName || "Group",
-    href: `/groups/${id}`,   // ← must be present
-    items: [
-      { href: `/groups/${id}/balances`, label: "View balance" },
-      { href: `/groups/${id}/settle`, label: "Settle" },
-      { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
-    ],
-  });
+ setSidebarSection({
+  label: groupName || "Group",
+  href: `/groups/${id}`,
+  items: [
+    { href: `/groups/${id}/balances`, label: "View balance" },
+    { href: `/groups/${id}/settle`, label: "Settle" },
+    { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
+  ],
+});
   return () => setSidebarSection(null);
 }, [id, groupName, setSidebarSection]);
 

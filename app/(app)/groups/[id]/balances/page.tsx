@@ -77,13 +77,14 @@ export default function BalancesPage() {
 
   useEffect(() => {
     setSidebarSection({
-      label: groupName || "Group",
-      items: [
-        { href: `/groups/${id}/balances`, label: "View balance" },
-        { href: `/groups/${id}/settle`, label: "Settle" },
-        { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
-      ],
-    });
+  label: groupName || "Group",
+  href: `/groups/${id}`,
+  items: [
+    { href: `/groups/${id}/balances`, label: "View balance" },
+    { href: `/groups/${id}/settle`, label: "Settle" },
+    { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
+  ],
+});
     return () => setSidebarSection(null);
   }, [id, groupName, setSidebarSection]);
 

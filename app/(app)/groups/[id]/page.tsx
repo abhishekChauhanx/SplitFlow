@@ -184,15 +184,15 @@ function copyInviteLink() {
   setTimeout(() => setLinkCopied(false), 2000);
 }
 useEffect(() => {
-  setSidebarSection({
-    label: groupName || "Group",
-    href: `/groups/${id}`, // ADD THIS
-    items: [
-      { href: `/groups/${id}/balances`, label: "View balance" },
-      { href: `/groups/${id}/settle`, label: "Settle" },
-      { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
-    ],
-  });
+setSidebarSection({
+  label: groupName || "Group",
+  href: `/groups/${id}`,
+  items: [
+    { href: `/groups/${id}/balances`, label: "View balance" },
+    { href: `/groups/${id}/settle`, label: "Settle" },
+    { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
+  ],
+});
   return () => setSidebarSection(null);
 }, [id, groupName, setSidebarSection]);
 

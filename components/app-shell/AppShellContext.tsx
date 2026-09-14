@@ -8,6 +8,7 @@ export type SidebarExtraItem = {
 
 export type SidebarSection = {
   label: string;
+  href?: string;
   items: SidebarExtraItem[];
 } | null;
 
