@@ -72,27 +72,37 @@ export default function Sidebar({ section }: { section?: SidebarSection }) {
         })}
       </nav>
 
-    {section && section.items.length > 0 && (
-  <>
-    <p className="dash-sidebar-section-label" style={{ marginTop: "1.25rem" }}>
-      {section.label}
-    </p>
-    <nav className="dash-sidebar-nav">
-      {section.items.map((item) => {
-        const active = pathname === item.href;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`dash-sidebar-item${active ? " active" : ""}`}
-          >
-            <span>{item.label}</span>
-          </Link>
-        );
-      })}
-    </nav>
-  </>
-)}
+      {section && section.items.length > 0 && (
+        <>
+          {section.href ? (
+            <Link
+              href={section.href}
+              className="dash-sidebar-section-label"
+              style={{ marginTop: "1.25rem", textDecoration: "none" }}
+            >
+              {section.label}
+            </Link>
+          ) : (
+            <p className="dash-sidebar-section-label" style={{ marginTop: "1.25rem" }}>
+              {section.label}
+            </p>
+          )}
+          <nav className="dash-sidebar-nav">
+            {section.items.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`dash-sidebar-item${active ? " active" : ""}`}
+                >
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </>
+      )}
     </aside>
   );
 }

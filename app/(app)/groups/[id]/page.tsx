@@ -175,16 +175,24 @@ export default function GroupDetailPage() {
   const isOnline = useOnlineStatus();
   const [queuedCount, setQueuedCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+const [linkCopied, setLinkCopied] = useState(false);
 
- useEffect(() => {
-  setSidebarSection({
-    label: groupName || "Group",
-    items: [
-      { href: `/groups/${id}/balances`, label: "View balance" },
-      { href: `/groups/${id}/settle`, label: "Settle" },
-      { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
-    ],
-  });
+function copyInviteLink() {
+  if (!inviteLink) return;
+  navigator.clipboard.writeText(inviteLink);
+  setLinkCopied(true);
+  setTimeout(() => setLinkCopied(false), 2000);
+}
+useEffect(() => {
+setSidebarSection({
+  label: groupName || "Group",
+  href: `/groups/${id}`,
+  items: [
+    { href: `/groups/${id}/balances`, label: "View balance" },
+    { href: `/groups/${id}/settle`, label: "Settle" },
+    { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
+  ],
+});
   return () => setSidebarSection(null);
 }, [id, groupName, setSidebarSection]);
 
@@ -606,9 +614,10 @@ export default function GroupDetailPage() {
   }
 
   function closeInviteModal() {
-    setShowInviteModal(false);
-    setInviteLink(null);
-  }
+  setShowInviteModal(false);
+  setInviteLink(null);
+  setLinkCopied(false); 
+}
 
   async function addPlaceholder() {
     if (!placeholderName.trim()) return;
@@ -1145,18 +1154,37 @@ export default function GroupDetailPage() {
         )}
 
         {showInviteModal && inviteLink && (
-          <Dialog
-            icon="🔗"
-            iconColor="#16a34a"
-            title="Invite link"
-            onBackdropClick={closeInviteModal}
-            footer={<DialogButton onClick={closeInviteModal}>OK</DialogButton>}
-          >
-            <input value={inviteLink} readOnly style={{ width: "100%" }} />
-            <DialogButton variant="secondary" onClick={() => navigator.clipboard.writeText(inviteLink)}>Copy link</DialogButton>
-            <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Valid 7 days — share via WhatsApp or copy.</p>
-          </Dialog>
-        )}
+  <Dialog
+    icon="🔗"
+    iconColor="#16a34a"
+    title="Invite link"
+    onBackdropClick={closeInviteModal}
+    footer={<DialogButton onClick={closeInviteModal}>OK</DialogButton>}
+  >
+    <input value={inviteLink} readOnly style={{ width: "100%" }} />
+
+    <button onClick={copyInviteLink} className={`group-copy-btn${linkCopied ? " copied" : ""}`}>
+      {linkCopied ? (
+        <>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          Copied
+        </>
+      ) : (
+        <>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+          </svg>
+          Copy link
+        </>
+      )}
+    </button>
+
+    <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Valid 7 days — share via WhatsApp or copy.</p>
+  </Dialog>
+)}
 
         {showExpenseModal && (
           <Dialog

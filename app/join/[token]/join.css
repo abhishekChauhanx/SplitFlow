@@ -1,0 +1,128 @@
+/* Public invite/join page — standalone, no app shell (same as /login).
+   Same tokens as dashboard.css but centered, single-card layout. */
+
+.join-page {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #ffffff;
+  color: #18181b;
+  padding: 1.5rem;
+}
+
+.dark .join-page {
+  background: #000000;
+  color: #ffffff;
+}
+
+.join-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 380px;
+  border-radius: 1.25rem;
+  border: 1px solid #e4e4e7;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(8px);
+  padding: 2.25rem 2rem;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+}
+
+.dark .join-card {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+}
+
+.join-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+  margin: 0 0 0.5rem;
+}
+
+.join-group-name {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.join-btn {
+  margin-top: 1.75rem;
+  width: 100%;
+  height: 2.75rem;
+  border-radius: 0.75rem;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(to right, #4f46e5, #0ea5e9);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(79, 70, 229, 0.2);
+  transition: box-shadow 0.15s ease;
+}
+
+.join-btn:hover {
+  box-shadow: 0 4px 10px rgba(79, 70, 229, 0.35);
+}
+
+.dark .join-btn {
+  background: #ffffff;
+  color: #000000;
+  box-shadow: none;
+}
+
+/* ---------- Error state ---------- */
+
+.join-error-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 380px;
+  border-radius: 1.25rem;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  padding: 2.25rem 2rem;
+  text-align: center;
+}
+
+.dark .join-error-card {
+  border-color: rgba(248, 113, 113, 0.25);
+  background: rgba(127, 29, 29, 0.15);
+}
+
+.join-error-text {
+  margin: 0 0 1.25rem;
+  font-size: 0.9375rem;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.dark .join-error-text {
+  color: #f87171;
+}
+
+.join-error-btn {
+  height: 2.5rem;
+  padding: 0 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #18181b;
+  cursor: pointer;
+}
+
+.dark .join-error-btn {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+}

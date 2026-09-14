@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import SFLoaderOverlay from "@/components/SFLoaderOverlay";
+import "../../home.css";
+import "./join.css";
 
 export default function JoinPage() {
   const { token } = useParams();
@@ -64,30 +67,40 @@ export default function JoinPage() {
     router.replace(`/groups/${data.groupId}`);
   }
 
-  if (status === "loading") {
-    return <p style={{ textAlign: "center", marginTop: 80 }}>Checking invite...</p>;
-  }
-
   if (status === "error") {
     return (
-      <div style={{ textAlign: "center", marginTop: 80 }}>
-        <p style={{ color: "red" }}>{error}</p>
-        <button onClick={() => router.push("/login")}>Go to login</button>
+      <div className="join-page">
+        <div className="hero-glow" />
+        <div className="hero-grid" />
+        <div className="join-error-card">
+          <p className="join-error-text">{error}</p>
+          <button onClick={() => router.push("/login")} className="join-error-btn">
+            Go to login
+          </button>
+        </div>
       </div>
     );
   }
 
-  if (status === "joining") {
-    return <p style={{ textAlign: "center", marginTop: 80 }}>Joining {groupName}...</p>;
-  }
-
   return (
-    <div style={{ maxWidth: 360, margin: "80px auto", padding: "0 16px", textAlign: "center" }}>
-      <h1>You've been invited to join</h1>
-      <h2>{groupName}</h2>
-      <button onClick={join} style={{ marginTop: 16 }}>
-        Join group
-      </button>
+    <div className="join-page">
+      <div className="hero-glow" />
+      <div className="hero-grid" />
+
+      <SFLoaderOverlay
+        visible={status === "loading" || status === "joining"}
+        label={status === "joining" ? `Joining ${groupName}` : "Checking invite"}
+      />
+
+      {status === "ready" && (
+        <div className="join-card">
+          <p className="join-eyebrow">You've been invited to join</p>
+          <h1 className="text-gradient join-group-name">{groupName}</h1>
+          <button onClick={join} className="join-btn">
+            Join group
+          </button>
+        </div>
+      )}
     </div>
   );
 }
