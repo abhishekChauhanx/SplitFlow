@@ -27,83 +27,87 @@ export default function UserAvatarMenu({
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} className="relative">
+      {/* Avatar button */}
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Account menu"
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: "50%",
-          background: "#2563eb",
-          color: "#fff",
-          border: "none",
-          fontWeight: 700,
-          fontSize: 13,
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        aria-expanded={open}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-[13px] font-bold text-white transition-colors hover:bg-indigo-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:ring-offset-black"
       >
         {initials}
       </button>
 
+      {/* Dropdown */}
       {open && (
-        <div
-          style={{
-            position: "absolute",
-            top: 44,
-            right: 0,
-            minWidth: 200,
-            background: "#161616",
-            border: "1px solid #2a2a2a",
-            borderRadius: 8,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
-            zIndex: 500,
-            overflow: "hidden",
-          }}
-        >
-          <div style={{ padding: "10px 14px", borderBottom: "1px solid #2a2a2a" }}>
-            <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#eee" }}>
+        <div className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-lg shadow-zinc-200/60 dark:border-white/10 dark:bg-zinc-900 dark:shadow-black/40">
+          
+          {/* User info header */}
+          <div className="px-4 py-3 border-b border-zinc-100 dark:border-white/10">
+            <p className="truncate text-[13px] font-semibold text-zinc-900 dark:text-white">
               {name || "Account"}
             </p>
-            {email && <p style={{ margin: "2px 0 0", fontSize: 12, color: "#888" }}>{email}</p>}
+            {email && (
+              <p className="mt-0.5 truncate text-[11px] text-zinc-500 dark:text-zinc-500">
+                {email}
+              </p>
+            )}
           </div>
 
-          <button
-            onClick={() => {
-              setOpen(false);
-              onOpenInfo();
-            }}
-            style={menuItemStyle}
-          >
-            Information
-          </button>
+          {/* Information button */}
+          <div className="border-b border-zinc-100 dark:border-white/10">
+            <button
+              onClick={() => { setOpen(false); onOpenInfo(); }}
+              className="avatar-menu-item w-full text-left text-zinc-700 dark:text-zinc-300"
+            >
+              Information
+            </button>
+          </div>
 
-          <Link href="/account" style={{ fontSize: 13, color: "#888" }}>Account</Link>
-          <Link href="/vendor/dashboard" style={{ fontSize: 13, color: "#888" }}>
-            Vendor portal
-          </Link>
-          <Link href="/tenant/dashboard" style={{ fontSize: 13, color: "#888" }}>
-  My payments
-</Link>
-<Link href="/kitty" style={{ fontSize: 13, color: "#888" }}>
-  Collection pools
-</Link>
+          {/* Nav links */}
+          <div className="border-b border-zinc-100 dark:border-white/10 py-1">
+            <Link
+              href="/account"
+              onClick={() => setOpen(false)}
+              className="avatar-menu-item text-zinc-500 dark:text-zinc-400"
+            >
+              Account
+            </Link>
+            <Link
+              href="/vendor/dashboard"
+              onClick={() => setOpen(false)}
+              className="avatar-menu-item text-zinc-500 dark:text-zinc-400"
+            >
+              Vendor portal
+            </Link>
+            <Link
+              href="/tenant/dashboard"
+              onClick={() => setOpen(false)}
+              className="avatar-menu-item text-zinc-500 dark:text-zinc-400"
+            >
+              My payments
+            </Link>
+            <Link
+              href="/kitty"
+              onClick={() => setOpen(false)}
+              className="avatar-menu-item text-zinc-500 dark:text-zinc-400"
+            >
+              Collection pools
+            </Link>
+          </div>
+
+          {/* Log out */}
           <button
-            onClick={() => {
-              setOpen(false);
-              onLogout();
-            }}
-            style={{ ...menuItemStyle, color: "#f87171" }}
+            onClick={() => { setOpen(false); onLogout(); }}
+            className="avatar-menu-item w-full text-left text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
           >
             Log out
           </button>
@@ -112,15 +116,3 @@ export default function UserAvatarMenu({
     </div>
   );
 }
-
-const menuItemStyle: React.CSSProperties = {
-  display: "block",
-  width: "100%",
-  textAlign: "left",
-  padding: "10px 14px",
-  background: "transparent",
-  border: "none",
-  color: "#ccc",
-  fontSize: 13,
-  cursor: "pointer",
-};
