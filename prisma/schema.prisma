@@ -34,6 +34,8 @@ model User {
   kittiesOrganized     Kitty[]              @relation("KittyOrganizer")
   kittyContributions   KittyContribution[]  @relation("KittyContributor")
   kittyExpensesLogged  KittyExpense[]       @relation("KittySpender")
+  messages     Message[]
+  messageReads MessageRead[]
 }
 
 model GroupInvite {
@@ -55,6 +57,8 @@ model Group {
   expenses    Expense[]
   invites     GroupInvite[]
   settlements Settlement[]   // NEW — back-relation for Settlement.group
+  messages     Message[]
+  messageReads MessageRead[]
 }
 model Expense {
   id                  String             @id @default(cuid())
@@ -333,4 +337,30 @@ model KittyExpense {
   spentById   String
   spentBy     User     @relation("KittySpender", fields: [spentById], references: [id])
   createdAt   DateTime @default(now())
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  groupId   String
+  senderId  String
+  body      String    @db.VarChar(2000)
+  clientId  String    @unique
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  group  Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  sender User  @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([groupId, createdAt])
+}
+
+model MessageRead {
+  userId     String
+  groupId    String
+  lastReadAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
 }
