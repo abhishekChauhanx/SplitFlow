@@ -21,6 +21,7 @@ import ChatPanel from "@/components/chat/ChatPanel";
 import "../../../home.css";
 import "./group.css";
 import "../../../../components/chat/chat.css"
+import GroupChat from "@/components/chat/GroupChat";
 
 type RecurringTemplateRow = {
   id: string;
@@ -1300,10 +1301,10 @@ export default function GroupDetailPage() {
       {/* ---- Floating chat button + slide-over panel (Step 4) ---- */}
       <ChatButton unreadCount={chatUnreadCount} onClick={() => setChatOpen(true)} />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} groupName={groupName || "Group"}>
-        <p style={{ padding: "1.25rem", color: "#71717a", fontSize: 13 }}>
-          Chat UI goes here — Step 5.
-        </p>
-      </ChatPanel>
+  {chatOpen && (
+    <GroupChat groupId={id as string} currentUserId={currentUserId} active={chatOpen} />
+  )}
+</ChatPanel>
     </div>
   );
 }

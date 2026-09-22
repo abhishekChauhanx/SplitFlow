@@ -18,32 +18,23 @@ export function useGroupChatRealtime(
   groupId: string | null,
   onInsert: (message: MessageRow) => void
 ) {
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const onInsertRef = useRef(onInsert);
+  onInsertRef.current = onInsert; // always call the latest closure, avoids stale state
 
   useEffect(() => {
     if (!groupId) return;
 
-    const channel = supabase
+    const channel: RealtimeChannel = supabase
       .channel(`group-messages-${groupId}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "Message",
-          filter: `groupId=eq.${groupId}`,
-        },
-        (payload) => {
-          onInsert(payload.new as MessageRow);
-        }
+        { event: "INSERT", schema: "public", table: "Message", filter: `groupId=eq.${groupId}` },
+        (payload) => onInsertRef.current(payload.new as MessageRow)
       )
       .subscribe();
 
-    channelRef.current = channel;
-
     return () => {
       supabase.removeChannel(channel);
-      channelRef.current = null;
     };
-  }, [groupId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [groupId]);
 }

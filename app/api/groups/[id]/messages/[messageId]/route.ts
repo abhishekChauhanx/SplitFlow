@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUserId } from "@/lib/auth";
+import { getSessionUserId } from "@/lib/session";
 import { assertGroupMember, handleGroupError } from "@/lib/group-auth";
 
 export async function DELETE(
@@ -9,7 +9,7 @@ export async function DELETE(
 ) {
   try {
     const { messageId } = await params;
-    const userId = await getUserId();
+    const userId = await getSessionUserId();
 
     const message = await prisma.message.findUnique({
       where: { id: messageId },

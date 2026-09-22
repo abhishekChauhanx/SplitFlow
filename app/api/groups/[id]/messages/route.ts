@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUserId } from "@/lib/auth";
+import { getSessionUserId } from "@/lib/session";
 import { assertGroupMember, handleGroupError } from "@/lib/group-auth";
 
 const MAX_BODY = 2000;
@@ -12,7 +12,7 @@ export async function GET(
 ) {
   try {
     const { id: groupId } = await params;
-    const userId = await getUserId();
+    const userId = await getSessionUserId();
     await assertGroupMember(userId, groupId);
 
     const { searchParams } = new URL(req.url);
@@ -51,7 +51,7 @@ export async function POST(
 ) {
   try {
     const { id: groupId } = await params;
-    const userId = await getUserId();
+    const userId = await getSessionUserId();
     await assertGroupMember(userId, groupId);
 
     const { body, clientId } = await req.json();

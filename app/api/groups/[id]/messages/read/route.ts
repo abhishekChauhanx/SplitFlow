@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUserId } from "@/lib/auth";
+import { getSessionUserId } from "@/lib/session";
 import { assertGroupMember, handleGroupError } from "@/lib/group-auth";
 
 export async function POST(
@@ -9,7 +9,7 @@ export async function POST(
 ) {
   try {
     const { id: groupId } = await params;
-    const userId = await getUserId();
+    const userId = await getSessionUserId();
     await assertGroupMember(userId, groupId);
 
     await prisma.messageRead.upsert({
