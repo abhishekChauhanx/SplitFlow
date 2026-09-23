@@ -1322,6 +1322,7 @@ export default function GroupDetailPage() {
             currentUserId={currentUserId}
             active={chatOpen}
             incomingMessage={lastIncomingChatMessage}
+            currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
           />
         )}
       </ChatPanel>

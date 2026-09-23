@@ -134,12 +134,16 @@ export default function GroupChat({
         onSaveEdit={saveEdit}
       />
 
-      {typingUsers.length > 0 && (
-        <div className="chat-typing-indicator">
-          <span className="chat-typing-dots"><span></span><span></span><span></span></span>
-          {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing…
-        </div>
-      )}
+     {typingUsers.length > 0 && (
+  <div className="chat-typing-indicator">
+    <span className="chat-typing-dots"><span></span><span></span><span></span></span>
+    <span className="chat-typing-text">
+      {typingUsers.length === 1
+        ? `${typingUsers[0]} is typing…`
+        : `${typingUsers.join(", ")} are typing…`}
+    </span>
+  </div>
+)}
 
       <MessageComposer onSend={send} onTyping={notifyTyping} />
     </div>

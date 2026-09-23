@@ -37,21 +37,22 @@ export function useTypingIndicator(
   }, [groupId, currentUserId]);
 
   const notifyTyping = useCallback(() => {
+  const name = currentUserName?.trim() || "Someone";
+  channelRef.current?.send({
+    type: "broadcast",
+    event: "typing",
+    payload: { userId: currentUserId, name },
+  });
+
+  if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
+  stopTimeoutRef.current = setTimeout(() => {
     channelRef.current?.send({
       type: "broadcast",
-      event: "typing",
-      payload: { userId: currentUserId, name: currentUserName },
+      event: "stop_typing",
+      payload: { name },
     });
-
-    if (stopTimeoutRef.current) clearTimeout(stopTimeoutRef.current);
-    stopTimeoutRef.current = setTimeout(() => {
-      channelRef.current?.send({
-        type: "broadcast",
-        event: "stop_typing",
-        payload: { name: currentUserName },
-      });
-    }, 2000);
-  }, [currentUserId, currentUserName]);
+  }, 2000);
+}, [currentUserId, currentUserName]);
 
   return { typingUsers, notifyTyping };
 }
