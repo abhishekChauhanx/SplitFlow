@@ -13,12 +13,14 @@ export default function GroupChat({
   currentUserName,
   active,
   incomingMessage,
+  members
 }: {
   groupId: string;
   currentUserId: string | null;
   currentUserName: string;
   active: boolean;
   incomingMessage: any | null;
+  members: { userId: string; user: { name: string | null; email: string | null } }[];
 }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,38 +62,39 @@ export default function GroupChat({
     if (active) markRead();
   }, [incomingMessage, active, markRead, loadHistory]);
 
-  async function send(body: string) {
-    const clientId = generateClientId();
-    const optimistic = {
-      id: `pending-${clientId}`,
-      clientId,
-      body,
-      createdAt: new Date().toISOString(),
-      pendingSync: true,
-      sender: { id: currentUserId, name: "You", email: null },
-    };
-    setMessages((prev) => [...prev, optimistic]);
+  async function send(body: string, mentionIds: string[]) {
+  const clientId = generateClientId();
+  const optimistic = {
+    id: `pending-${clientId}`,
+    clientId,
+    body,
+    mentionIds,
+    createdAt: new Date().toISOString(),
+    pendingSync: true,
+    sender: { id: currentUserId, name: "You", email: null },
+  };
+  setMessages((prev) => [...prev, optimistic]);
 
-    if (!isOnline) {
-      const { enqueueMessage } = await import("@/lib/offline-queue");
-      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/groups/${groupId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body, clientId }),
-      });
-      if (!res.ok) throw new Error();
-      const saved = await res.json();
-      setMessages((prev) => prev.map((m) => (m.clientId === clientId ? saved : m)));
-    } catch {
-      const { enqueueMessage } = await import("@/lib/offline-queue");
-      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
-    }
+  if (!isOnline) {
+    const { enqueueMessage } = await import("@/lib/offline-queue");
+    await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() }); // mentionIds not queued offline yet — acceptable gap for now
+    return;
   }
+
+  try {
+    const res = await fetch(`/api/groups/${groupId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body, clientId, mentionIds }),
+    });
+    if (!res.ok) throw new Error();
+    const saved = await res.json();
+    setMessages((prev) => prev.map((m) => (m.clientId === clientId ? saved : m)));
+  } catch {
+    const { enqueueMessage } = await import("@/lib/offline-queue");
+    await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
+  }
+}
 
   async function remove(messageId: string) {
     setMessages((prev) =>
@@ -145,7 +148,7 @@ export default function GroupChat({
   </div>
 )}
 
-      <MessageComposer onSend={send} onTyping={notifyTyping} />
+      <MessageComposer onSend={send} onTyping={notifyTyping} members={members} currentUserId={currentUserId} />
     </div>
   );
 }

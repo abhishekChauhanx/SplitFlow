@@ -1318,12 +1318,13 @@ export default function GroupDetailPage() {
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} groupName={groupName || "Group"}>
         {chatOpen && (
           <GroupChat
-            groupId={id as string}
-            currentUserId={currentUserId}
-            active={chatOpen}
-            incomingMessage={lastIncomingChatMessage}
-            currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
-          />
+  groupId={id as string}
+  currentUserId={currentUserId}
+  active={chatOpen}
+  incomingMessage={lastIncomingChatMessage}
+  currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
+  members={members}  
+/>
         )}
       </ChatPanel>
     </div>

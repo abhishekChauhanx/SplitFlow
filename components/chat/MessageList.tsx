@@ -67,7 +67,24 @@ export default function MessageList({
       </div>
     );
   }
+function renderBodyWithMentions(body: string) {
+  const parts: (string | JSX.Element)[] = [];
+  let lastIndex = 0;
+  let key = 0;
 
+  for (const match of body.matchAll(/@\[([^\]]+)\]\(([^)]+)\)/g)) {
+    const [full, name] = match;
+    const start = match.index!;
+    if (start > lastIndex) parts.push(body.slice(lastIndex, start));
+    parts.push(
+      <span key={key++} className="chat-mention-tag">@{name}</span>
+    );
+    lastIndex = start + full.length;
+  }
+  if (lastIndex < body.length) parts.push(body.slice(lastIndex));
+
+  return parts;
+}
   return (
     <div ref={containerRef} onScroll={onScroll} className="chat-list">
       {messages.map((m, i) => {
@@ -120,8 +137,8 @@ export default function MessageList({
                     <em className="chat-msg-deleted">Message deleted</em>
                   ) : (
                     <>
-                      {m.body}
-                      {m.editedAt && <span className="chat-msg-edited-tag"> (edited)</span>}
+                     {renderBodyWithMentions(m.body)}
+{m.editedAt && <span className="chat-msg-edited-tag"> (edited)</span>}
                     </>
                   )}
                   {m.pendingSync && <span className="chat-msg-pending">sending…</span>}

@@ -649,3 +649,59 @@
 .dark .chat-emoji-option:hover {
   background: rgba(255, 255, 255, 0.08);
 }
+
+
+.chat-composer-wrap {
+  position: relative;
+}
+
+.chat-mention-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: #1e1e2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.chat-mention-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: #eee;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-mention-option:hover,
+.chat-mention-option.active {
+  background: #2a2a3d;
+}
+
+.chat-mention-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #4f46e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.chat-mention-you-tag {
+  margin-left: auto;
+  font-size: 11px;
+  color: #71717a;
+}
