@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef } from "react";
+import EmojiPicker from "@/components/chat/EmojiPicker";
 
 export default function MessageComposer({
   onSend,
+  onTyping,
   disabled,
 }: {
   onSend: (body: string) => void;
+  onTyping?: () => void;
   disabled?: boolean;
 }) {
   const [value, setValue] = useState("");
@@ -23,6 +26,8 @@ export default function MessageComposer({
 
   return (
     <div className="chat-composer">
+      <EmojiPicker onSelect={(emoji) => setValue((v) => v + emoji)} />
+
       <textarea
         ref={ref}
         rows={1}
@@ -30,7 +35,10 @@ export default function MessageComposer({
         maxLength={MAX}
         placeholder="Write a message…"
         className="chat-composer-input"
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          onTyping?.();
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" && !e.shiftKey) {
             e.preventDefault();
@@ -38,6 +46,7 @@ export default function MessageComposer({
           }
         }}
       />
+
       <button className="chat-send-btn" onClick={submit} disabled={!value.trim() || disabled}>
         Send
       </button>

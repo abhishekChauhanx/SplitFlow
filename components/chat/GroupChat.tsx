@@ -5,21 +5,25 @@ import MessageList from "@/components/chat/MessageList";
 import MessageComposer from "@/components/chat/MessageComposer";
 import { generateClientId } from "@/lib/offline-queue";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
+import { useTypingIndicator } from "@/lib/use-typing-indicator";
 
 export default function GroupChat({
   groupId,
   currentUserId,
+  currentUserName,
   active,
-  incomingMessage, // passed down from the always-mounted listener
+  incomingMessage,
 }: {
   groupId: string;
   currentUserId: string | null;
+  currentUserName: string;
   active: boolean;
   incomingMessage: any | null;
 }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const isOnline = useOnlineStatus();
+  const { typingUsers, notifyTyping } = useTypingIndicator(groupId, currentUserId, currentUserName);
 
   const markRead = useCallback(() => {
     fetch(`/api/groups/${groupId}/messages/read`, { method: "POST" }).catch(() => {});
@@ -39,7 +43,8 @@ export default function GroupChat({
     if (active) markRead();
   }, [active, markRead]);
 
-  // reconcile every time the listener above receives a new realtime row
+  // reconciles both new messages (INSERT) and edits/deletes (UPDATE) —
+  // the listener sends both event types through this same callback
   useEffect(() => {
     if (!incomingMessage) return;
     setMessages((prev) => {
@@ -49,7 +54,7 @@ export default function GroupChat({
           m.clientId === incomingMessage.clientId ? { ...incomingMessage, sender: m.sender } : m
         );
       }
-      loadHistory(); // message from someone else — no joined sender in raw payload
+      loadHistory(); // new message from someone else — refetch to get joined sender info
       return prev;
     });
     if (active) markRead();
@@ -95,6 +100,21 @@ export default function GroupChat({
     await fetch(`/api/messages/${messageId}`, { method: "DELETE" }).catch(() => {});
   }
 
+  async function saveEdit(messageId: string, newBody: string) {
+    const prevMessages = messages;
+    setMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, body: newBody, editedAt: new Date().toISOString() } : m))
+    );
+    const res = await fetch(`/api/messages/${messageId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body: newBody }),
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      setMessages(prevMessages); // roll back on failure
+    }
+  }
+
   if (loading) {
     return <div className="chat-list chat-list-empty"><p>Loading chat…</p></div>;
   }
@@ -106,8 +126,22 @@ export default function GroupChat({
           📡 Offline — messages will send once you're back online.
         </div>
       )}
-      <MessageList messages={messages} currentUserId={currentUserId} onDelete={remove} />
-      <MessageComposer onSend={send} />
+
+      <MessageList
+        messages={messages}
+        currentUserId={currentUserId}
+        onDelete={remove}
+        onSaveEdit={saveEdit}
+      />
+
+      {typingUsers.length > 0 && (
+        <div className="chat-typing-indicator">
+          <span className="chat-typing-dots"><span></span><span></span><span></span></span>
+          {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing…
+        </div>
+      )}
+
+      <MessageComposer onSend={send} onTyping={notifyTyping} />
     </div>
   );
 }

@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase-client";
 
-export function useTypingIndicator(groupId: string, currentUserId: string | null, currentUserName: string) {
+export function useTypingIndicator(
+  groupId: string,
+  currentUserId: string | null,
+  currentUserName: string
+) {
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const stopTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -16,10 +20,7 @@ export function useTypingIndicator(groupId: string, currentUserId: string | null
     channel
       .on("broadcast", { event: "typing" }, ({ payload }) => {
         if (payload.userId === currentUserId) return;
-        setTypingUsers((prev) =>
-          prev.includes(payload.name) ? prev : [...prev, payload.name]
-        );
-        // auto-clear if no follow-up "stop" arrives within 3s
+        setTypingUsers((prev) => (prev.includes(payload.name) ? prev : [...prev, payload.name]));
         setTimeout(() => {
           setTypingUsers((prev) => prev.filter((n) => n !== payload.name));
         }, 3000);
@@ -49,7 +50,7 @@ export function useTypingIndicator(groupId: string, currentUserId: string | null
         event: "stop_typing",
         payload: { name: currentUserName },
       });
-    }, 2000); // stop broadcasting "typing" after 2s of no keystrokes
+    }, 2000);
   }, [currentUserId, currentUserName]);
 
   return { typingUsers, notifyTyping };

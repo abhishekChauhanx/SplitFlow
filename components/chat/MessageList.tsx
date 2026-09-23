@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Message = {
   id: string;
   clientId: string;
   body: string;
   createdAt: string;
+  editedAt?: string | null;
   deletedAt?: string | null;
   pendingSync?: boolean;
   sender: { id: string; name: string | null; email: string | null };
@@ -16,14 +17,18 @@ export default function MessageList({
   messages,
   currentUserId,
   onDelete,
+  onSaveEdit,
 }: {
   messages: Message[];
   currentUserId: string | null;
   onDelete: (id: string) => void;
+  onSaveEdit: (id: string, newBody: string) => void;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
   useEffect(() => {
     if (stickToBottom.current) {
@@ -36,6 +41,23 @@ export default function MessageList({
     if (!el) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     stickToBottom.current = distance < 120;
+  }
+
+  function startEdit(m: Message) {
+    setEditingId(m.id);
+    setEditValue(m.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditValue("");
+  }
+
+  function confirmEdit() {
+    if (!editingId || !editValue.trim()) return;
+    onSaveEdit(editingId, editValue.trim());
+    setEditingId(null);
+    setEditValue("");
   }
 
   if (messages.length === 0) {
@@ -55,6 +77,7 @@ export default function MessageList({
           prev &&
           prev.sender.id === m.sender.id &&
           new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60 * 1000;
+        const isEditing = editingId === m.id;
 
         return (
           <div key={m.clientId || m.id} className={`chat-msg${mine ? " mine" : ""}${grouped ? " grouped" : ""}`}>
@@ -67,19 +90,50 @@ export default function MessageList({
               </p>
             )}
 
-            <div className="chat-bubble">
-              {m.deletedAt ? (
-                <em className="chat-msg-deleted">Message deleted</em>
-              ) : (
-                m.body
-              )}
-              {m.pendingSync && <span className="chat-msg-pending">sending…</span>}
-            </div>
+            {isEditing ? (
+              <div className="chat-bubble-edit">
+                <textarea
+                  className="chat-bubble-edit-input"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      confirmEdit();
+                    }
+                    if (e.key === "Escape") cancelEdit();
+                  }}
+                  autoFocus
+                  rows={2}
+                />
+                <div className="chat-bubble-edit-actions">
+                  <button className="chat-msg-delete" onClick={cancelEdit}>Cancel</button>
+                  <button className="chat-bubble-edit-save" onClick={confirmEdit} disabled={!editValue.trim()}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="chat-bubble">
+                  {m.deletedAt ? (
+                    <em className="chat-msg-deleted">Message deleted</em>
+                  ) : (
+                    <>
+                      {m.body}
+                      {m.editedAt && <span className="chat-msg-edited-tag"> (edited)</span>}
+                    </>
+                  )}
+                  {m.pendingSync && <span className="chat-msg-pending">sending…</span>}
+                </div>
 
-            {mine && !m.deletedAt && !m.pendingSync && (
-              <button className="chat-msg-delete" onClick={() => onDelete(m.id)}>
-                Delete
-              </button>
+                {mine && !m.deletedAt && !m.pendingSync && (
+                  <div className="chat-msg-actions">
+                    <button className="chat-msg-delete" onClick={() => startEdit(m)}>Edit</button>
+                    <button className="chat-msg-delete" onClick={() => onDelete(m.id)}>Delete</button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         );
