@@ -24,14 +24,19 @@ export function useGroupChatRealtime(
   useEffect(() => {
     if (!groupId) return;
 
-    const channel: RealtimeChannel = supabase
-      .channel(`group-messages-${groupId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "Message", filter: `groupId=eq.${groupId}` },
-        (payload) => onInsertRef.current(payload.new as MessageRow)
-      )
-      .subscribe();
+   const channel: RealtimeChannel = supabase
+  .channel(`group-messages-${groupId}`)
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "Message", filter: `groupId=eq.${groupId}` },
+    (payload) => onInsertRef.current(payload.new as MessageRow)
+  )
+  .on(
+    "postgres_changes",
+    { event: "UPDATE", schema: "public", table: "Message", filter: `groupId=eq.${groupId}` },
+    (payload) => onInsertRef.current(payload.new as MessageRow) // reuse the same handler — it already reconciles by clientId
+  )
+  .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
