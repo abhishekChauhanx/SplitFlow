@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardTopBar from "@/components/dashboard/DashboardTopBar";
-import { AppShellContext, SidebarSection } from "./AppShellContext";
+import { AppShellContext, SidebarSection, ChatNotice } from "./AppShellContext";
 import "@/components/dashboard/dashboard-shell.css";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -12,6 +12,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>(null);
+  const [chatNotices, setChatNotices] = useState<ChatNotice[]>([]);
   const infoHandlerRef = useRef<(() => void) | null>(null);
 
   const registerInfoHandler = useCallback((fn: (() => void) | null) => {
@@ -43,6 +44,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     [refreshPendingRequests]
   );
 
+  const pushChatNotice = useCallback((notice: ChatNotice) => {
+    setChatNotices((prev) => {
+      if (prev.some((n) => n.id === notice.id)) return prev; // dedupe by clientId
+      return [notice, ...prev];
+    });
+  }, []);
+
+  const clearChatNoticesForGroup = useCallback((groupId: string) => {
+    setChatNotices((prev) => prev.filter((n) => n.groupId !== groupId));
+  }, []);
+
+  const dismissChatNotice = useCallback((id: string) => {
+    setChatNotices((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/login");
@@ -69,12 +85,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         registerInfoHandler,
         sidebarSection,
         setSidebarSection,
+        chatNotices,
+        pushChatNotice,
+        clearChatNoticesForGroup,
+        dismissChatNotice,
       }}
     >
       <div className="dash-shell">
         <DashboardTopBar
           me={me}
           pendingRequests={pendingRequests}
+          chatNotices={chatNotices}
+          onDismissChatNotice={dismissChatNotice}
           onRespond={respondToRequest}
           onOpenInfo={() => infoHandlerRef.current?.()}
           onLogout={handleLogout}

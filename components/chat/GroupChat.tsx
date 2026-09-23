@@ -1,26 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback } from "react";
 import MessageList from "@/components/chat/MessageList";
 import MessageComposer from "@/components/chat/MessageComposer";
-import { useGroupChatRealtime } from "@/lib/use-group-chat-realtime";
 import { generateClientId } from "@/lib/offline-queue";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
 
 export default function GroupChat({
   groupId,
   currentUserId,
-  active, // true only while the panel is open — controls whether we mark-read
+  active,
+  incomingMessage, // passed down from the always-mounted listener
 }: {
   groupId: string;
   currentUserId: string | null;
   active: boolean;
+  incomingMessage: any | null;
 }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const isOnline = useOnlineStatus();
-  const messagesRef = useRef<any[]>([]);
-  messagesRef.current = messages;
 
   const markRead = useCallback(() => {
     fetch(`/api/groups/${groupId}/messages/read`, { method: "POST" }).catch(() => {});
@@ -38,27 +37,23 @@ export default function GroupChat({
 
   useEffect(() => {
     if (active) markRead();
-  }, [active, markRead, messages.length]);
+  }, [active, markRead]);
 
-  // Live updates — fires for every INSERT on this group, from any sender
-  useGroupChatRealtime(groupId, (incoming) => {
+  // reconcile every time the listener above receives a new realtime row
+  useEffect(() => {
+    if (!incomingMessage) return;
     setMessages((prev) => {
-      const seen = prev.some((m) => m.clientId === incoming.clientId);
+      const seen = prev.some((m) => m.clientId === incomingMessage.clientId);
       if (seen) {
-        // reconcile: our own optimistic row already exists — replace it
-        // with the real one (fetch sender details, since realtime payload
-        // doesn't include the joined sender record)
-        return prev.map((m) => (m.clientId === incoming.clientId ? { ...incoming, sender: m.sender } : m));
+        return prev.map((m) =>
+          m.clientId === incomingMessage.clientId ? { ...incomingMessage, sender: m.sender } : m
+        );
       }
-      // a message from someone else — we don't have their sender details
-      // from the realtime payload alone, so do a light refetch of just
-      // this one message via history endpoint on next poke; simplest fix
-      // for now is a full reload of the tail, acceptable at this scale
-      loadHistory();
+      loadHistory(); // message from someone else — no joined sender in raw payload
       return prev;
     });
     if (active) markRead();
-  });
+  }, [incomingMessage, active, markRead, loadHistory]);
 
   async function send(body: string) {
     const clientId = generateClientId();

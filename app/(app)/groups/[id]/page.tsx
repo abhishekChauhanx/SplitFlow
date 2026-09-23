@@ -18,10 +18,11 @@ import { syncQueuedExpenses } from "@/lib/sync-queue";
 import { useAppShell } from "@/components/app-shell/AppShellContext";
 import ChatButton from "@/components/chat/ChatButton";
 import ChatPanel from "@/components/chat/ChatPanel";
+import GroupChat from "@/components/chat/GroupChat";
+import GroupChatListener from "@/components/chat/GroupChatListener";
 import "../../../home.css";
 import "./group.css";
 import "../../../../components/chat/chat.css"
-import GroupChat from "@/components/chat/GroupChat";
 
 type RecurringTemplateRow = {
   id: string;
@@ -118,7 +119,7 @@ function DialogButton({
 
 export default function GroupDetailPage() {
   const { id } = useParams();
-  const { setSidebarSection } = useAppShell();
+  const { setSidebarSection, chatNotices, clearChatNoticesForGroup } = useAppShell();
   const { confirm, prompt } = useModal();
   const [initialLoading, setInitialLoading] = useState(true);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -181,9 +182,9 @@ export default function GroupDetailPage() {
   const [syncing, setSyncing] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // ---- Chat panel state (Step 4) ----
+  // ---- Chat panel state ----
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatUnreadCount, setChatUnreadCount] = useState(0); // wired to real counts in Step 6
+  const [lastIncomingChatMessage, setLastIncomingChatMessage] = useState<any>(null);
 
   function copyInviteLink() {
     if (!inviteLink) return;
@@ -1298,13 +1299,32 @@ export default function GroupDetailPage() {
         )}
       </div>
 
-      {/* ---- Floating chat button + slide-over panel (Step 4) ---- */}
-      <ChatButton unreadCount={chatUnreadCount} onClick={() => setChatOpen(true)} />
+      {/* ---- Chat: always-mounted listener + button + slide-over panel ---- */}
+      <GroupChatListener
+        groupId={id as string}
+        groupName={groupName || "Group"}
+        currentUserId={currentUserId}
+        active={chatOpen}
+        onIncoming={setLastIncomingChatMessage}
+      />
+
+      <ChatButton
+        unreadCount={chatNotices.filter((n) => n.groupId === id).length}
+        onClick={() => {
+          setChatOpen(true);
+          clearChatNoticesForGroup(id as string);
+        }}
+      />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} groupName={groupName || "Group"}>
-  {chatOpen && (
-    <GroupChat groupId={id as string} currentUserId={currentUserId} active={chatOpen} />
-  )}
-</ChatPanel>
+        {chatOpen && (
+          <GroupChat
+            groupId={id as string}
+            currentUserId={currentUserId}
+            active={chatOpen}
+            incomingMessage={lastIncomingChatMessage}
+          />
+        )}
+      </ChatPanel>
     </div>
   );
 }

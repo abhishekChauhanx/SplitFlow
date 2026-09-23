@@ -12,6 +12,14 @@ export type SidebarSection = {
   items: SidebarExtraItem[];
 } | null;
 
+export type ChatNotice = {
+  id: string; // use the message's clientId — prevents duplicate notices on retry/reconnect
+  groupId: string;
+  groupName: string;
+  preview: string;
+  senderName: string;
+};
+
 type AppShellCtx = {
   search: string;
   setSearch: (v: string) => void;
@@ -20,6 +28,10 @@ type AppShellCtx = {
   registerInfoHandler: (fn: (() => void) | null) => void;
   sidebarSection: SidebarSection;
   setSidebarSection: (section: SidebarSection) => void;
+  chatNotices: ChatNotice[];
+  pushChatNotice: (notice: ChatNotice) => void;
+  clearChatNoticesForGroup: (groupId: string) => void;
+  dismissChatNotice: (id: string) => void;
 };
 
 const Ctx = createContext<AppShellCtx | null>(null);
