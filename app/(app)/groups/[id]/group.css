@@ -477,3 +477,231 @@
   height: 15px;
   flex-shrink: 0;
 }
+
+
+/* ---------- Message actions (edit/delete) ---------- */
+
+.chat-msg-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.125rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-msg:hover .chat-msg-actions {
+  opacity: 1;
+}
+
+.chat-msg-edited-tag {
+  font-size: 0.6875rem;
+  opacity: 0.65;
+  font-style: italic;
+}
+
+/* ---------- Inline edit bubble ---------- */
+
+.chat-bubble-edit {
+  width: 100%;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.chat-bubble-edit-input {
+  width: 100%;
+  resize: none;
+  padding: 0.5rem 0.625rem;
+  border-radius: 0.75rem;
+  border: 1px solid #4f46e5;
+  background: #ffffff;
+  color: #18181b;
+  font-size: 0.875rem;
+  font-family: inherit;
+  line-height: 1.45;
+  outline: none;
+}
+
+.dark .chat-bubble-edit-input {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: #818cf8;
+}
+
+.chat-bubble-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.chat-bubble-edit-save {
+  border: none;
+  background: linear-gradient(to right, #4f46e5, #0ea5e9);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.chat-bubble-edit-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dark .chat-bubble-edit-save {
+  background: #ffffff;
+  color: #000000;
+}
+
+/* ---------- Typing indicator ---------- */
+
+.chat-typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 1.25rem;
+  font-size: 0.75rem;
+  color: #71717a;
+  flex-shrink: 0;
+}
+
+.chat-typing-dots {
+  display: inline-flex;
+  gap: 0.1875rem;
+}
+
+.chat-typing-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: #a1a1aa;
+  animation: chat-typing-bounce 1.2s infinite ease-in-out;
+}
+
+.chat-typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+.chat-typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes chat-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-3px); opacity: 1; }
+}
+
+/* ---------- Emoji picker ---------- */
+
+.chat-emoji-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chat-emoji-trigger {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  font-size: 1.125rem;
+  cursor: pointer;
+}
+
+.dark .chat-emoji-trigger {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.chat-emoji-popover {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.25rem;
+  padding: 0.625rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e4e4e7;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  width: 220px;
+}
+
+.dark .chat-emoji-popover {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #161616;
+}
+
+.chat-emoji-option {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: none;
+  font-size: 1.125rem;
+  cursor: pointer;
+  border-radius: 0.375rem;
+}
+
+.chat-emoji-option:hover {
+  background: #f4f4f5;
+}
+
+.dark .chat-emoji-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+
+.chat-composer-wrap {
+  position: relative;
+}
+
+.chat-mention-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: #1e1e2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.chat-mention-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: #eee;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-mention-option:hover,
+.chat-mention-option.active {
+  background: #2a2a3d;
+}
+
+.chat-mention-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #4f46e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.chat-mention-you-tag {
+  margin-left: auto;
+  font-size: 11px;
+  color: #71717a;
+}

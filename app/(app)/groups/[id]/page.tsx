@@ -16,8 +16,13 @@ import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { enqueueExpense, generateClientId, getQueuedExpenses } from "@/lib/offline-queue";
 import { syncQueuedExpenses } from "@/lib/sync-queue";
 import { useAppShell } from "@/components/app-shell/AppShellContext";
+import ChatButton from "@/components/chat/ChatButton";
+import ChatPanel from "@/components/chat/ChatPanel";
+import GroupChat from "@/components/chat/GroupChat";
+import GroupChatListener from "@/components/chat/GroupChatListener";
 import "../../../home.css";
 import "./group.css";
+import "../../../../components/chat/chat.css"
 
 type RecurringTemplateRow = {
   id: string;
@@ -114,7 +119,7 @@ function DialogButton({
 
 export default function GroupDetailPage() {
   const { id } = useParams();
-  const { setSidebarSection } = useAppShell();
+  const { setSidebarSection, chatNotices, clearChatNoticesForGroup } = useAppShell();
   const { confirm, prompt } = useModal();
   const [initialLoading, setInitialLoading] = useState(true);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -175,26 +180,31 @@ export default function GroupDetailPage() {
   const isOnline = useOnlineStatus();
   const [queuedCount, setQueuedCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
-const [linkCopied, setLinkCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
-function copyInviteLink() {
-  if (!inviteLink) return;
-  navigator.clipboard.writeText(inviteLink);
-  setLinkCopied(true);
-  setTimeout(() => setLinkCopied(false), 2000);
-}
-useEffect(() => {
-setSidebarSection({
-  label: groupName || "Group",
-  href: `/groups/${id}`,
-  items: [
-    { href: `/groups/${id}/balances`, label: "View balance" },
-    { href: `/groups/${id}/settle`, label: "Settle" },
-    { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
-  ],
-});
-  return () => setSidebarSection(null);
-}, [id, groupName, setSidebarSection]);
+  // ---- Chat panel state ----
+  const [chatOpen, setChatOpen] = useState(false);
+  const [lastIncomingChatMessage, setLastIncomingChatMessage] = useState<any>(null);
+
+  function copyInviteLink() {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
+
+  useEffect(() => {
+    setSidebarSection({
+      label: groupName || "Group",
+      href: `/groups/${id}`,
+      items: [
+        { href: `/groups/${id}/balances`, label: "View balance" },
+        { href: `/groups/${id}/settle`, label: "Settle" },
+        { href: `/groups/${id}/recurring`, label: "Recurring expenses" },
+      ],
+    });
+    return () => setSidebarSection(null);
+  }, [id, groupName, setSidebarSection]);
 
   const loadDisputes = useCallback(async () => {
     const res = await fetch(`/api/groups/${id}/disputes`);
@@ -614,10 +624,10 @@ setSidebarSection({
   }
 
   function closeInviteModal() {
-  setShowInviteModal(false);
-  setInviteLink(null);
-  setLinkCopied(false); 
-}
+    setShowInviteModal(false);
+    setInviteLink(null);
+    setLinkCopied(false);
+  }
 
   async function addPlaceholder() {
     if (!placeholderName.trim()) return;
@@ -931,39 +941,39 @@ setSidebarSection({
         </div>
 
         <div className="group-section" style={{ marginTop: 0 }}>
-  <p className="group-section-label">Members</p>
-  <div className="group-members-grid">
-    {members.map((m) => {
-      const ts = memberScores[m.userId];
-      const badge = ts ? scoreBadgeColor(ts.score) : null;
-      return (
-        <div key={m.userId} className="group-member-card">
-          <span className="group-member-avatar">
-            {(m.user.name || m.user.email || "?")[0].toUpperCase()}
-          </span>
-          <span className="group-member-name">
-            {m.user.name || m.user.email}
-            {m.userId === currentUserId && <span className="group-member-me-tag">(me)</span>}
-          </span>
-          {ts && ts.totalSettlements > 0 && (
-            <span
-              title={`${ts.label} — based on ${ts.totalSettlements} settlements`}
-              className="group-trust-badge"
-              style={{ background: badge!.bg, color: badge!.text }}
-            >
-              {ts.score} · {ts.label}
-            </span>
-          )}
-          {ts && ts.totalSettlements === 0 && (
-            <span className="group-trust-badge" style={{ background: "#e4e4e7", color: "#71717a" }}>
-              New member
-            </span>
-          )}
+          <p className="group-section-label">Members</p>
+          <div className="group-members-grid">
+            {members.map((m) => {
+              const ts = memberScores[m.userId];
+              const badge = ts ? scoreBadgeColor(ts.score) : null;
+              return (
+                <div key={m.userId} className="group-member-card">
+                  <span className="group-member-avatar">
+                    {(m.user.name || m.user.email || "?")[0].toUpperCase()}
+                  </span>
+                  <span className="group-member-name">
+                    {m.user.name || m.user.email}
+                    {m.userId === currentUserId && <span className="group-member-me-tag">(me)</span>}
+                  </span>
+                  {ts && ts.totalSettlements > 0 && (
+                    <span
+                      title={`${ts.label} — based on ${ts.totalSettlements} settlements`}
+                      className="group-trust-badge"
+                      style={{ background: badge!.bg, color: badge!.text }}
+                    >
+                      {ts.score} · {ts.label}
+                    </span>
+                  )}
+                  {ts && ts.totalSettlements === 0 && (
+                    <span className="group-trust-badge" style={{ background: "#e4e4e7", color: "#71717a" }}>
+                      New member
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      );
-    })}
-  </div>
-</div>
 
         {summary && (
           <div className="group-section">
@@ -1154,37 +1164,37 @@ setSidebarSection({
         )}
 
         {showInviteModal && inviteLink && (
-  <Dialog
-    icon="🔗"
-    iconColor="#16a34a"
-    title="Invite link"
-    onBackdropClick={closeInviteModal}
-    footer={<DialogButton onClick={closeInviteModal}>OK</DialogButton>}
-  >
-    <input value={inviteLink} readOnly style={{ width: "100%" }} />
+          <Dialog
+            icon="🔗"
+            iconColor="#16a34a"
+            title="Invite link"
+            onBackdropClick={closeInviteModal}
+            footer={<DialogButton onClick={closeInviteModal}>OK</DialogButton>}
+          >
+            <input value={inviteLink} readOnly style={{ width: "100%" }} />
 
-    <button onClick={copyInviteLink} className={`group-copy-btn${linkCopied ? " copied" : ""}`}>
-      {linkCopied ? (
-        <>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          Copied
-        </>
-      ) : (
-        <>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-          </svg>
-          Copy link
-        </>
-      )}
-    </button>
+            <button onClick={copyInviteLink} className={`group-copy-btn${linkCopied ? " copied" : ""}`}>
+              {linkCopied ? (
+                <>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Copied
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                  </svg>
+                  Copy link
+                </>
+              )}
+            </button>
 
-    <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Valid 7 days — share via WhatsApp or copy.</p>
-  </Dialog>
-)}
+            <p style={{ fontSize: 12, color: "#888", margin: 0 }}>Valid 7 days — share via WhatsApp or copy.</p>
+          </Dialog>
+        )}
 
         {showExpenseModal && (
           <Dialog
@@ -1288,6 +1298,35 @@ setSidebarSection({
           </Dialog>
         )}
       </div>
+
+      {/* ---- Chat: always-mounted listener + button + slide-over panel ---- */}
+      <GroupChatListener
+        groupId={id as string}
+        groupName={groupName || "Group"}
+        currentUserId={currentUserId}
+        active={chatOpen}
+        onIncoming={setLastIncomingChatMessage}
+      />
+
+      <ChatButton
+        unreadCount={chatNotices.filter((n) => n.groupId === id).length}
+        onClick={() => {
+          setChatOpen(true);
+          clearChatNoticesForGroup(id as string);
+        }}
+      />
+      <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} groupName={groupName || "Group"}>
+        {chatOpen && (
+          <GroupChat
+  groupId={id as string}
+  currentUserId={currentUserId}
+  active={chatOpen}
+  incomingMessage={lastIncomingChatMessage}
+  currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
+  members={members}  
+/>
+        )}
+      </ChatPanel>
     </div>
   );
 }
