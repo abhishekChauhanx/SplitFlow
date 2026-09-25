@@ -16,6 +16,7 @@ import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { enqueueExpense, generateClientId, getQueuedExpenses } from "@/lib/offline-queue";
 import { syncQueuedExpenses } from "@/lib/sync-queue";
 import { useAppShell } from "@/components/app-shell/AppShellContext";
+import { useEditPermissionRealtime } from "@/lib/use-edit-permission-realtime";
 import ChatButton from "@/components/chat/ChatButton";
 import ChatPanel from "@/components/chat/ChatPanel";
 import GroupChat from "@/components/chat/GroupChat";
@@ -186,6 +187,8 @@ export default function GroupDetailPage() {
   const [chatOpen, setChatOpen] = useState(false);
   const [lastIncomingChatMessage, setLastIncomingChatMessage] = useState<any>(null);
 
+  const myPermissionsFetchIdRef = useRef(0);
+const pendingRequestsFetchIdRef = useRef(0);
   function copyInviteLink() {
     if (!inviteLink) return;
     navigator.clipboard.writeText(inviteLink);
@@ -369,57 +372,87 @@ export default function GroupDetailPage() {
     if (res.ok) setRecurringTemplates(await res.json());
   }, [id]);
 
-  const loadPendingRequests = useCallback(() => {
-    return fetch(`/api/edit-permissions/pending?groupId=${id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) setPendingRequests(data);
-      })
-      .catch(() => {});
-  }, [id]);
+ const loadPendingRequests = useCallback(() => {
+  const fetchId = ++pendingRequestsFetchIdRef.current;
+
+  return fetch(`/api/edit-permissions/pending?groupId=${id}`)
+    .then((r) => r.json())
+    .then((data) => {
+      if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
+      if (Array.isArray(data)) setPendingRequests(data);
+    })
+    .catch(() => {});
+}, [id]);
+
+const refreshPendingRequests = useCallback(async () => {
+  const fetchId = ++pendingRequestsFetchIdRef.current;
+
+  const res = await fetch("/api/edit-permissions/pending");
+  if (res.ok) {
+    const data = await res.json();
+    if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
+    if (Array.isArray(data)) setPendingRequests(data);
+  }
+}, []);
 
   const loadMyPermissions = useCallback(() => {
-    return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
-      .then((r) => r.json())
-      .then(async (data: any[]) => {
-        if (!Array.isArray(data)) return;
+  const fetchId = ++myPermissionsFetchIdRef.current;
 
-        const map: Record<string, string> = {};
-        const idMap: Record<string, string> = {};
+  return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
+    .then((r) => r.json())
+    .then(async (data: any[]) => {
+      if (fetchId !== myPermissionsFetchIdRef.current) return; // stale response, drop it
+      if (!Array.isArray(data)) return;
 
-        for (const p of data) {
-          if (!p.expense) continue;
+      const map: Record<string, string> = {};
+      const idMap: Record<string, string> = {};
 
-          map[p.expenseId] = p.status;
-          idMap[p.expenseId] = p.id;
+      for (const p of data) {
+        if (!p.expense) continue;
 
-          const alreadyNotified = p.notified || notifiedPermissionsRef.current.has(p.id);
+        map[p.expenseId] = p.status;
+        idMap[p.expenseId] = p.id;
 
-          if (p.status === "approved" && !alreadyNotified) {
-            notifiedPermissionsRef.current.add(p.id);
-            await confirm({
-              title: "Permission approved",
-              message: `You can now edit or delete "${p.expense.description}".`,
-              mode: "alert",
-            });
-            fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
-          } else if (p.status === "denied" && !alreadyNotified) {
-            notifiedPermissionsRef.current.add(p.id);
-            await confirm({
-              title: "Permission denied",
-              message: `The expense creator declined your request to edit "${p.expense.description}".`,
-              mode: "alert",
-            });
-            fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
-            delete map[p.expenseId];
-            delete idMap[p.expenseId];
-          }
+        const alreadyNotified = p.notified || notifiedPermissionsRef.current.has(p.id);
+
+        if (p.status === "approved" && !alreadyNotified) {
+          notifiedPermissionsRef.current.add(p.id);
+          await confirm({
+            title: "Permission approved",
+            message: `You can now edit or delete "${p.expense.description}".`,
+            mode: "alert",
+          });
+          fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
+        } else if (p.status === "denied" && !alreadyNotified) {
+          notifiedPermissionsRef.current.add(p.id);
+          await confirm({
+            title: "Permission denied",
+            message: `The expense creator declined your request to edit "${p.expense.description}".`,
+            mode: "alert",
+          });
+          fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
+          delete map[p.expenseId];
+          delete idMap[p.expenseId];
         }
+      }
 
-        setMyPermissions(map);
-        setPendingRequestIds(idMap);
-      }).catch(() => {});
-  }, [confirm, id]);
+      // Re-check after the awaits above — a newer fetch may have started
+      // and already resolved while we were waiting on confirm() dialogs.
+      if (fetchId !== myPermissionsFetchIdRef.current) return;
+
+      setMyPermissions(map);
+      setPendingRequestIds(idMap);
+    })
+    .catch(() => {});
+}, [confirm, id]);
+
+  // Realtime replaces the old 8s setInterval — any INSERT/UPDATE on
+  // EditPermission triggers a refetch of this group's pending requests
+  // and the current user's own outstanding requests.
+  useEditPermissionRealtime(currentUserId, () => {
+    loadPendingRequests();
+    loadMyPermissions();
+  });
 
   useEffect(() => {
     fetch("/api/me").then((r) => r.json()).then((me) => setCurrentUserId(me.userId));
@@ -432,13 +465,6 @@ export default function GroupDetailPage() {
       loadRecurringTemplates(),
     ]).finally(() => setInitialLoading(false));
 
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible" && navigator.onLine) {
-        loadPendingRequests();
-        loadMyPermissions();
-      }
-    }, 8000);
-
     function handleFocusOrVisible() {
       if (document.visibilityState === "visible" && navigator.onLine) {
         loadSummary();
@@ -450,7 +476,6 @@ export default function GroupDetailPage() {
     document.addEventListener("visibilitychange", handleFocusOrVisible);
 
     return () => {
-      clearInterval(interval);
       window.removeEventListener("focus", handleFocusOrVisible);
       document.removeEventListener("visibilitychange", handleFocusOrVisible);
     };
@@ -495,47 +520,51 @@ export default function GroupDetailPage() {
     loadPendingRequests();
   }
 
-  async function requestEditPermission(expenseId: string, action: string) {
-    setRequestingPermissionId(expenseId);
-    try {
-      const res = await fetch(`/api/groups/${id}/expenses/${expenseId}/request-edit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const data = await res.json();
+ async function requestEditPermission(expenseId: string, action: string) {
+  setRequestingPermissionId(expenseId);
+  try {
+    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}/request-edit`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const data = await res.json();
 
-      if (data.approved) {
-        setEditingExpense(expenseId);
-        const expense = expenses.find((e) => e.id === expenseId);
-        if (expense) {
-          setEditDesc(expense.description);
-          setEditAmount((expense.amountPaise / 100).toString());
-          setEditPaidById(expense.paidById);
-        }
-      } else if (data.reason === "already_pending") {
-        setRequestingPermissionId(null);
-        await confirm({
-          title: "Already requested",
-          message: "You've already requested this — waiting on the expense creator to respond.",
-          mode: "alert",
-        });
-        setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
-        return;
-      } else {
-        setRequestingPermissionId(null);
-        await confirm({
-          title: "Request sent",
-          message: "The creator of this expense has been notified. You'll see an update here once they respond.",
-          mode: "alert",
-        });
-        setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
-        return;
+    if (data.approved) {
+      // Mark it approved immediately so the row's lock icon clears
+      // right away, instead of waiting on the realtime refetch.
+      setMyPermissions((prev) => ({ ...prev, [expenseId]: "approved" }));
+
+      setEditingExpense(expenseId);
+      const expense = expenses.find((e) => e.id === expenseId);
+      if (expense) {
+        setEditDesc(expense.description);
+        setEditAmount((expense.amountPaise / 100).toString());
+        setEditPaidById(expense.paidById);
       }
-    } finally {
+    } else if (data.reason === "already_pending") {
       setRequestingPermissionId(null);
+      await confirm({
+        title: "Already requested",
+        message: "You've already requested this — waiting on the expense creator to respond.",
+        mode: "alert",
+      });
+      setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+      return;
+    } else {
+      setRequestingPermissionId(null);
+      await confirm({
+        title: "Request sent",
+        message: "The creator of this expense has been notified. You'll see an update here once they respond.",
+        mode: "alert",
+      });
+      setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+      return;
     }
+  } finally {
+    setRequestingPermissionId(null);
   }
+}
 
   async function deleteExpense(expenseId: string) {
     const ok = await confirm({
@@ -1318,13 +1347,13 @@ export default function GroupDetailPage() {
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} groupName={groupName || "Group"}>
         {chatOpen && (
           <GroupChat
-  groupId={id as string}
-  currentUserId={currentUserId}
-  active={chatOpen}
-  incomingMessage={lastIncomingChatMessage}
-  currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
-  members={members}  
-/>
+            groupId={id as string}
+            currentUserId={currentUserId}
+            active={chatOpen}
+            incomingMessage={lastIncomingChatMessage}
+            currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
+            members={members}
+          />
         )}
       </ChatPanel>
     </div>
