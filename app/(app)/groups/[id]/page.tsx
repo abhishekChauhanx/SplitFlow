@@ -384,34 +384,22 @@ const pendingRequestsFetchIdRef = useRef(0);
     .catch(() => {});
 }, [id]);
 
-const refreshPendingRequests = useCallback(async () => {
-  const fetchId = ++pendingRequestsFetchIdRef.current;
 
-  const res = await fetch("/api/edit-permissions/pending");
-  if (res.ok) {
-    const data = await res.json();
-    if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
-    if (Array.isArray(data)) setPendingRequests(data);
-  }
-}, []);
-
-  const loadMyPermissions = useCallback(() => {
+ const loadMyPermissions = useCallback(() => {
   const fetchId = ++myPermissionsFetchIdRef.current;
 
   return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
     .then((r) => r.json())
     .then(async (data: any[]) => {
-      if (fetchId !== myPermissionsFetchIdRef.current) return; // stale response, drop it
+      if (fetchId !== myPermissionsFetchIdRef.current) return;
       if (!Array.isArray(data)) return;
 
       const map: Record<string, string> = {};
       const idMap: Record<string, string> = {};
+      const seenExpenseIds = new Set<string>(); // track which expenses we've already taken the newest row for
 
       for (const p of data) {
         if (!p.expense) continue;
-
-        map[p.expenseId] = p.status;
-        idMap[p.expenseId] = p.id;
 
         const alreadyNotified = p.notified || notifiedPermissionsRef.current.has(p.id);
 
@@ -431,13 +419,19 @@ const refreshPendingRequests = useCallback(async () => {
             mode: "alert",
           });
           fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
-          delete map[p.expenseId];
-          delete idMap[p.expenseId];
+        }
+
+        // data is ordered newest-first — only the first row we see per
+        // expense should decide what the row's current lock state is.
+        if (!seenExpenseIds.has(p.expenseId)) {
+          seenExpenseIds.add(p.expenseId);
+          if (p.status !== "denied") {
+            map[p.expenseId] = p.status;
+            idMap[p.expenseId] = p.id;
+          }
         }
       }
 
-      // Re-check after the awaits above — a newer fetch may have started
-      // and already resolved while we were waiting on confirm() dialogs.
       if (fetchId !== myPermissionsFetchIdRef.current) return;
 
       setMyPermissions(map);

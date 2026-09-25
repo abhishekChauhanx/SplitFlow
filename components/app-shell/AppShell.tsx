@@ -15,7 +15,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>(null);
   const [chatNotices, setChatNotices] = useState<ChatNotice[]>([]);
   const infoHandlerRef = useRef<(() => void) | null>(null);
-
+const pendingRequestsFetchIdRef = useRef(0);
   const registerInfoHandler = useCallback((fn: (() => void) | null) => {
     infoHandlerRef.current = fn;
   }, []);
@@ -25,13 +25,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (res.ok) setMe(await res.json());
   }, []);
 
-  const refreshPendingRequests = useCallback(async () => {
-    const res = await fetch("/api/edit-permissions/pending");
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) setPendingRequests(data);
-    }
-  }, []);
+const refreshPendingRequests = useCallback(async () => {
+  const fetchId = ++pendingRequestsFetchIdRef.current;
+
+  const res = await fetch("/api/edit-permissions/pending");
+  if (res.ok) {
+    const data = await res.json();
+    if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
+    if (Array.isArray(data)) setPendingRequests(data);
+  }
+}, []);
 
   const respondToRequest = useCallback(
     async (id: string, decision: "approved" | "denied") => {
