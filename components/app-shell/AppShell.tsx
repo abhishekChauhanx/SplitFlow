@@ -4,17 +4,18 @@ import { useRouter } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import DashboardTopBar from "@/components/dashboard/DashboardTopBar";
 import { AppShellContext, SidebarSection, ChatNotice } from "./AppShellContext";
+import { useEditPermissionRealtime } from "@/lib/use-edit-permission-realtime";
 import "@/components/dashboard/dashboard-shell.css";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
+  const [me, setMe] = useState<{ userId?: string; name?: string; email?: string } | null>(null);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [search, setSearch] = useState("");
   const [sidebarSection, setSidebarSection] = useState<SidebarSection>(null);
   const [chatNotices, setChatNotices] = useState<ChatNotice[]>([]);
   const infoHandlerRef = useRef<(() => void) | null>(null);
-
+const pendingRequestsFetchIdRef = useRef(0);
   const registerInfoHandler = useCallback((fn: (() => void) | null) => {
     infoHandlerRef.current = fn;
   }, []);
@@ -24,13 +25,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (res.ok) setMe(await res.json());
   }, []);
 
-  const refreshPendingRequests = useCallback(async () => {
-    const res = await fetch("/api/edit-permissions/pending");
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data)) setPendingRequests(data);
-    }
-  }, []);
+const refreshPendingRequests = useCallback(async () => {
+  const fetchId = ++pendingRequestsFetchIdRef.current;
+
+  const res = await fetch("/api/edit-permissions/pending");
+  if (res.ok) {
+    const data = await res.json();
+    if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
+    if (Array.isArray(data)) setPendingRequests(data);
+  }
+}, []);
 
   const respondToRequest = useCallback(
     async (id: string, decision: "approved" | "denied") => {
@@ -64,15 +68,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }
 
+  // Realtime replaces the old 8s polling interval — any INSERT/UPDATE on
+  // EditPermission triggers a single refetch of the joined, shaped list
+  // instead of blind polling every 8 seconds regardless of activity.
+  useEditPermissionRealtime(me?.userId ?? null, () => {
+    refreshPendingRequests();
+  });
+
   useEffect(() => {
     loadMe();
     refreshPendingRequests();
-    const interval = setInterval(() => {
-      if (document.visibilityState === "visible" && navigator.onLine) {
-        refreshPendingRequests();
-      }
-    }, 8000);
-    return () => clearInterval(interval);
   }, [loadMe, refreshPendingRequests]);
 
   return (
