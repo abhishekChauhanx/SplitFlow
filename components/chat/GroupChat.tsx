@@ -7,6 +7,8 @@ import Spinner from "@/components/Spinner";
 import { generateClientId } from "@/lib/offline-queue";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { useTypingIndicator } from "@/lib/use-typing-indicator";
+import { useGroupPresence } from "@/lib/use-group-presence";
+import { useGroupReadReceipts } from "@/lib/use-group-read-receipts";
 
 export default function GroupChat({
   groupId,
@@ -27,6 +29,8 @@ export default function GroupChat({
   const [loading, setLoading] = useState(true);
   const isOnline = useOnlineStatus();
   const { typingUsers, notifyTyping } = useTypingIndicator(groupId, currentUserId, currentUserName);
+  const onlineUserIds = useGroupPresence(groupId, currentUserId, active);
+  const readMap = useGroupReadReceipts(groupId);
 
   const markRead = useCallback(() => {
     fetch(`/api/groups/${groupId}/messages/read`, { method: "POST" }).catch(() => {});
@@ -46,8 +50,6 @@ export default function GroupChat({
     if (active) markRead();
   }, [active, markRead]);
 
-  // reconciles both new messages (INSERT) and edits/deletes (UPDATE) —
-  // the listener sends both event types through this same callback
   useEffect(() => {
     if (!incomingMessage) return;
     setMessages((prev) => {
@@ -57,7 +59,7 @@ export default function GroupChat({
           m.clientId === incomingMessage.clientId ? { ...incomingMessage, sender: m.sender } : m
         );
       }
-      loadHistory(); // new message from someone else — refetch to get joined sender info
+      loadHistory();
       return prev;
     });
     if (active) markRead();
@@ -78,7 +80,7 @@ export default function GroupChat({
 
     if (!isOnline) {
       const { enqueueMessage } = await import("@/lib/offline-queue");
-      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() }); // mentionIds not queued offline yet — acceptable gap for now
+      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
       return;
     }
 
@@ -115,7 +117,7 @@ export default function GroupChat({
       body: JSON.stringify({ body: newBody }),
     }).catch(() => null);
     if (!res || !res.ok) {
-      setMessages(prevMessages); // roll back on failure
+      setMessages(prevMessages);
     }
   }
 
@@ -138,6 +140,9 @@ export default function GroupChat({
       <MessageList
         messages={messages}
         currentUserId={currentUserId}
+        members={members}
+        onlineUserIds={onlineUserIds}
+        readMap={readMap}
         onDelete={remove}
         onSaveEdit={saveEdit}
       />

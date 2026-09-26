@@ -631,3 +631,25 @@
 .dark .chat-msg-time-always {
   color: #71717a;
 }
+
+
+.chat-msg-time-always {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+}
+
+.chat-status {
+  display: inline-flex;
+  align-items: center;
+  color: #a1a1aa;
+}
+
+.chat-status-read {
+  color: #0ea5e9; /* colored = read, matches your existing gradient blue */
+}
+
+.chat-status-icon {
+  width: 0.875rem;
+  height: 0.875rem;
+}
