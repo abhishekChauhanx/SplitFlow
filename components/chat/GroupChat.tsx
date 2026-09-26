@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import MessageList from "@/components/chat/MessageList";
 import MessageComposer from "@/components/chat/MessageComposer";
+import Spinner from "@/components/Spinner";
 import { generateClientId } from "@/lib/offline-queue";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { useTypingIndicator } from "@/lib/use-typing-indicator";
@@ -63,38 +64,38 @@ export default function GroupChat({
   }, [incomingMessage, active, markRead, loadHistory]);
 
   async function send(body: string, mentionIds: string[]) {
-  const clientId = generateClientId();
-  const optimistic = {
-    id: `pending-${clientId}`,
-    clientId,
-    body,
-    mentionIds,
-    createdAt: new Date().toISOString(),
-    pendingSync: true,
-    sender: { id: currentUserId, name: "You", email: null },
-  };
-  setMessages((prev) => [...prev, optimistic]);
+    const clientId = generateClientId();
+    const optimistic = {
+      id: `pending-${clientId}`,
+      clientId,
+      body,
+      mentionIds,
+      createdAt: new Date().toISOString(),
+      pendingSync: true,
+      sender: { id: currentUserId, name: "You", email: null },
+    };
+    setMessages((prev) => [...prev, optimistic]);
 
-  if (!isOnline) {
-    const { enqueueMessage } = await import("@/lib/offline-queue");
-    await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() }); // mentionIds not queued offline yet — acceptable gap for now
-    return;
-  }
+    if (!isOnline) {
+      const { enqueueMessage } = await import("@/lib/offline-queue");
+      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() }); // mentionIds not queued offline yet — acceptable gap for now
+      return;
+    }
 
-  try {
-    const res = await fetch(`/api/groups/${groupId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body, clientId, mentionIds }),
-    });
-    if (!res.ok) throw new Error();
-    const saved = await res.json();
-    setMessages((prev) => prev.map((m) => (m.clientId === clientId ? saved : m)));
-  } catch {
-    const { enqueueMessage } = await import("@/lib/offline-queue");
-    await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
+    try {
+      const res = await fetch(`/api/groups/${groupId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body, clientId, mentionIds }),
+      });
+      if (!res.ok) throw new Error();
+      const saved = await res.json();
+      setMessages((prev) => prev.map((m) => (m.clientId === clientId ? saved : m)));
+    } catch {
+      const { enqueueMessage } = await import("@/lib/offline-queue");
+      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
+    }
   }
-}
 
   async function remove(messageId: string) {
     setMessages((prev) =>
@@ -119,7 +120,11 @@ export default function GroupChat({
   }
 
   if (loading) {
-    return <div className="chat-list chat-list-empty"><p>Loading chat…</p></div>;
+    return (
+      <div className="chat-list chat-list-empty">
+        <Spinner />
+      </div>
+    );
   }
 
   return (
@@ -137,16 +142,16 @@ export default function GroupChat({
         onSaveEdit={saveEdit}
       />
 
-     {typingUsers.length > 0 && (
-  <div className="chat-typing-indicator">
-    <span className="chat-typing-dots"><span></span><span></span><span></span></span>
-    <span className="chat-typing-text">
-      {typingUsers.length === 1
-        ? `${typingUsers[0]} is typing…`
-        : `${typingUsers.join(", ")} are typing…`}
-    </span>
-  </div>
-)}
+      {typingUsers.length > 0 && (
+        <div className="chat-typing-indicator">
+          <span className="chat-typing-dots"><span></span><span></span><span></span></span>
+          <span className="chat-typing-text">
+            {typingUsers.length === 1
+              ? `${typingUsers[0]} is typing…`
+              : `${typingUsers.join(", ")} are typing…`}
+          </span>
+        </div>
+      )}
 
       <MessageComposer onSend={send} onTyping={notifyTyping} members={members} currentUserId={currentUserId} />
     </div>
