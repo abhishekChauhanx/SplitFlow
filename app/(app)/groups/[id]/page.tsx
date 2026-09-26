@@ -24,7 +24,7 @@ import GroupChatListener from "@/components/chat/GroupChatListener";
 import "../../../home.css";
 import "./group.css";
 import "../../../../components/chat/chat.css"
-
+import { useGroupPresence } from "@/lib/use-group-presence";
 type RecurringTemplateRow = {
   id: string;
   description: string;
@@ -189,6 +189,7 @@ export default function GroupDetailPage() {
 
   const myPermissionsFetchIdRef = useRef(0);
 const pendingRequestsFetchIdRef = useRef(0);
+const onlineUserIds = useGroupPresence(id as string, currentUserId);
   function copyInviteLink() {
     if (!inviteLink) return;
     navigator.clipboard.writeText(inviteLink);
@@ -1339,17 +1340,18 @@ const pendingRequestsFetchIdRef = useRef(0);
         }}
       />
       <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} groupName={groupName || "Group"}>
-        {chatOpen && (
-          <GroupChat
-            groupId={id as string}
-            currentUserId={currentUserId}
-            active={chatOpen}
-            incomingMessage={lastIncomingChatMessage}
-            currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
-            members={members}
-          />
-        )}
-      </ChatPanel>
+  {chatOpen && (
+    <GroupChat
+      groupId={id as string}
+      currentUserId={currentUserId}
+      active={chatOpen}
+      incomingMessage={lastIncomingChatMessage}
+      currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
+      members={members}
+      onlineUserIds={onlineUserIds}
+    />
+  )}
+</ChatPanel>
     </div>
   );
 }

@@ -27,7 +27,7 @@ function getMessageStatus(
   if (m.pendingSync) return "pending";
 
   const others = members.filter((mem) => mem.userId !== currentUserId);
-  if (others.length === 0) return "sent"; // no one else in the group yet
+  if (others.length === 0) return "sent";
 
   const msgTime = new Date(m.createdAt).getTime();
 
@@ -57,7 +57,6 @@ function StatusIcon({ status }: { status: MessageStatus }) {
       </svg>
     );
   }
-  // delivered or read — double tick, color differs via className on wrapper
   return (
     <svg className="chat-status-icon" viewBox="0 0 20 16" fill="none">
       <path d="M1 8.5L4.5 12L13 3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />

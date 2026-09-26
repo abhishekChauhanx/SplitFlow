@@ -4,10 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import MessageList from "@/components/chat/MessageList";
 import MessageComposer from "@/components/chat/MessageComposer";
 import Spinner from "@/components/Spinner";
-import { generateClientId } from "@/lib/offline-queue";
+import { generateClientId, getQueuedMessages } from "@/lib/offline-queue";
+import { syncQueuedMessages } from "@/lib/sync-queue";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { useTypingIndicator } from "@/lib/use-typing-indicator";
-import { useGroupPresence } from "@/lib/use-group-presence";
 import { useGroupReadReceipts } from "@/lib/use-group-read-receipts";
 
 export default function GroupChat({
@@ -16,7 +16,8 @@ export default function GroupChat({
   currentUserName,
   active,
   incomingMessage,
-  members
+  members,
+  onlineUserIds,
 }: {
   groupId: string;
   currentUserId: string | null;
@@ -24,12 +25,12 @@ export default function GroupChat({
   active: boolean;
   incomingMessage: any | null;
   members: { userId: string; user: { name: string | null; email: string | null } }[];
+  onlineUserIds: Set<string>;
 }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const isOnline = useOnlineStatus();
   const { typingUsers, notifyTyping } = useTypingIndicator(groupId, currentUserId, currentUserName);
-  const onlineUserIds = useGroupPresence(groupId, currentUserId, active);
   const readMap = useGroupReadReceipts(groupId);
 
   const markRead = useCallback(() => {
@@ -49,6 +50,26 @@ export default function GroupChat({
   useEffect(() => {
     if (active) markRead();
   }, [active, markRead]);
+
+  useEffect(() => {
+    if (!isOnline) return;
+
+    (async () => {
+      const queued = await getQueuedMessages();
+      const forThisGroup = queued.filter((q) => q.groupId === groupId);
+      if (forThisGroup.length === 0) return;
+
+      await syncQueuedMessages((syncedGroupId, saved) => {
+        if (syncedGroupId !== groupId) return;
+        setMessages((prev) => {
+          const alreadyThere = prev.some((m) => m.clientId === saved.clientId);
+          return alreadyThere
+            ? prev.map((m) => (m.clientId === saved.clientId ? saved : m))
+            : [...prev, saved];
+        });
+      });
+    })();
+  }, [isOnline, groupId]);
 
   useEffect(() => {
     if (!incomingMessage) return;

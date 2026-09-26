@@ -5,13 +5,12 @@ import { supabase } from "@/lib/supabase-client";
 
 export function useGroupPresence(
   groupId: string | null,
-  currentUserId: string | null,
-  active: boolean // only track presence while the chat panel is actually open
+  currentUserId: string | null
 ) {
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (!groupId || !currentUserId || !active) {
+    if (!groupId || !currentUserId) {
       setOnlineUserIds(new Set());
       return;
     }
@@ -22,7 +21,8 @@ export function useGroupPresence(
 
     channel
       .on("presence", { event: "sync" }, () => {
-        setOnlineUserIds(new Set(Object.keys(channel.presenceState())));
+        const ids = Object.keys(channel.presenceState());
+        setOnlineUserIds(new Set(ids));
       })
       .subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
@@ -33,7 +33,7 @@ export function useGroupPresence(
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [groupId, currentUserId, active]);
+  }, [groupId, currentUserId]);
 
   return onlineUserIds;
 }
