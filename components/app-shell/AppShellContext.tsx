@@ -13,7 +13,7 @@ export type SidebarSection = {
 } | null;
 
 export type ChatNotice = {
-  id: string; // use the message's clientId — prevents duplicate notices on retry/reconnect
+  id: string;
   groupId: string;
   groupName: string;
   preview: string;
@@ -32,6 +32,7 @@ type AppShellCtx = {
   pushChatNotice: (notice: ChatNotice) => void;
   clearChatNoticesForGroup: (groupId: string) => void;
   dismissChatNotice: (id: string) => void;
+  onlineUserIds: Set<string>; // app-wide — anyone currently logged in anywhere
 };
 
 const Ctx = createContext<AppShellCtx | null>(null);
