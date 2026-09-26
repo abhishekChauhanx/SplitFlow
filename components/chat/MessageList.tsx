@@ -60,6 +60,10 @@ export default function MessageList({
     setEditValue("");
   }
 
+  function formatTime(iso: string) {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   if (messages.length === 0) {
     return (
       <div className="chat-list chat-list-empty">
@@ -67,43 +71,42 @@ export default function MessageList({
       </div>
     );
   }
-function renderBodyWithMentions(body: string) {
-  const parts: (string | JSX.Element)[] = [];
-  let lastIndex = 0;
-  let key = 0;
 
-  for (const match of body.matchAll(/@\[([^\]]+)\]\(([^)]+)\)/g)) {
-    const [full, name] = match;
-    const start = match.index!;
-    if (start > lastIndex) parts.push(body.slice(lastIndex, start));
-    parts.push(
-      <span key={key++} className="chat-mention-tag">@{name}</span>
-    );
-    lastIndex = start + full.length;
+  function renderBodyWithMentions(body: string) {
+    const parts: (string | JSX.Element)[] = [];
+    let lastIndex = 0;
+    let key = 0;
+
+    for (const match of body.matchAll(/@\[([^\]]+)\]\(([^)]+)\)/g)) {
+      const [full, name] = match;
+      const start = match.index!;
+      if (start > lastIndex) parts.push(body.slice(lastIndex, start));
+      parts.push(
+        <span key={key++} className="chat-mention-tag">@{name}</span>
+      );
+      lastIndex = start + full.length;
+    }
+    if (lastIndex < body.length) parts.push(body.slice(lastIndex));
+
+    return parts;
   }
-  if (lastIndex < body.length) parts.push(body.slice(lastIndex));
 
-  return parts;
-}
   return (
     <div ref={containerRef} onScroll={onScroll} className="chat-list">
       {messages.map((m, i) => {
         const mine = m.sender.id === currentUserId;
         const prev = messages[i - 1];
-        const grouped =
-          prev &&
-          prev.sender.id === m.sender.id &&
-          new Date(m.createdAt).getTime() - new Date(prev.createdAt).getTime() < 5 * 60 * 1000;
+        // Still used to decide whether to show the NAME (avoids repeating
+        // "Abhishek Chauhan" above every single bubble in a row) — but no
+        // longer used to hide the timestamp. Every message always shows its time.
+        const sameSenderAsPrev = prev && prev.sender.id === m.sender.id;
         const isEditing = editingId === m.id;
 
         return (
-          <div key={m.clientId || m.id} className={`chat-msg${mine ? " mine" : ""}${grouped ? " grouped" : ""}`}>
-            {!grouped && (
+          <div key={m.clientId || m.id} className={`chat-msg${mine ? " mine" : ""}${sameSenderAsPrev ? " grouped" : ""}`}>
+            {!sameSenderAsPrev && (
               <p className="chat-msg-meta">
                 {mine ? "You" : m.sender.name || m.sender.email}
-                <span className="chat-msg-time">
-                  {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
               </p>
             )}
 
@@ -132,16 +135,19 @@ function renderBodyWithMentions(body: string) {
               </div>
             ) : (
               <>
-                <div className="chat-bubble">
-                  {m.deletedAt ? (
-                    <em className="chat-msg-deleted">Message deleted</em>
-                  ) : (
-                    <>
-                     {renderBodyWithMentions(m.body)}
-{m.editedAt && <span className="chat-msg-edited-tag"> (edited)</span>}
-                    </>
-                  )}
-                  {m.pendingSync && <span className="chat-msg-pending">sending…</span>}
+                <div className="chat-bubble-row">
+                  <div className="chat-bubble">
+                    {m.deletedAt ? (
+                      <em className="chat-msg-deleted">Message deleted</em>
+                    ) : (
+                      <>
+                        {renderBodyWithMentions(m.body)}
+                        {m.editedAt && <span className="chat-msg-edited-tag"> (edited)</span>}
+                      </>
+                    )}
+                    {m.pendingSync && <span className="chat-msg-pending">sending…</span>}
+                  </div>
+                  <span className="chat-msg-time-always">{formatTime(m.createdAt)}</span>
                 </div>
 
                 {mine && !m.deletedAt && !m.pendingSync && (
