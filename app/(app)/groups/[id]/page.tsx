@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
@@ -120,6 +120,7 @@ function DialogButton({
 
 export default function GroupDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const { setSidebarSection, chatNotices, clearChatNoticesForGroup, onlineUserIds } = useAppShell();
   const { confirm, prompt } = useModal();
   const [initialLoading, setInitialLoading] = useState(true);
@@ -186,6 +187,10 @@ export default function GroupDetailPage() {
   // ---- Chat panel state ----
   const [chatOpen, setChatOpen] = useState(false);
   const [lastIncomingChatMessage, setLastIncomingChatMessage] = useState<any>(null);
+
+  // ---- Group lifecycle state ----
+  const [leaving, setLeaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
 
   const myPermissionsFetchIdRef = useRef(0);
   const pendingRequestsFetchIdRef = useRef(0);
@@ -379,7 +384,7 @@ export default function GroupDetailPage() {
     return fetch(`/api/edit-permissions/pending?groupId=${id}`)
       .then((r) => r.json())
       .then((data) => {
-        if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
+        if (fetchId !== pendingRequestsFetchIdRef.current) return;
         if (Array.isArray(data)) setPendingRequests(data);
       })
       .catch(() => {});
@@ -396,7 +401,7 @@ export default function GroupDetailPage() {
 
         const map: Record<string, string> = {};
         const idMap: Record<string, string> = {};
-        const seenExpenseIds = new Set<string>(); // track which expenses we've already taken the newest row for
+        const seenExpenseIds = new Set<string>();
 
         for (const p of data) {
           if (!p.expense) continue;
@@ -421,8 +426,6 @@ export default function GroupDetailPage() {
             fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
           }
 
-          // data is ordered newest-first — only the first row we see per
-          // expense should decide what the row's current lock state is.
           if (!seenExpenseIds.has(p.expenseId)) {
             seenExpenseIds.add(p.expenseId);
             if (p.status !== "denied") {
@@ -440,9 +443,6 @@ export default function GroupDetailPage() {
       .catch(() => {});
   }, [confirm, id]);
 
-  // Realtime replaces the old 8s setInterval — any INSERT/UPDATE on
-  // EditPermission triggers a refetch of this group's pending requests
-  // and the current user's own outstanding requests.
   useEditPermissionRealtime(currentUserId, () => {
     loadPendingRequests();
     loadMyPermissions();
@@ -525,8 +525,6 @@ export default function GroupDetailPage() {
       const data = await res.json();
 
       if (data.approved) {
-        // Mark it approved immediately so the row's lock icon clears
-        // right away, instead of waiting on the realtime refetch.
         setMyPermissions((prev) => ({ ...prev, [expenseId]: "approved" }));
 
         setEditingExpense(expenseId);
@@ -858,6 +856,54 @@ export default function GroupDetailPage() {
     setEditPaidById(expense.paidById);
   }
 
+  async function leaveGroup() {
+    const ok = await confirm({
+      title: "Leave this group?",
+      message: "You'll lose access to this group's expenses and chat. This can't be undone — you'd need a new invite to rejoin.",
+      confirmLabel: "Leave group",
+    });
+    if (!ok) return;
+
+    setLeaving(true);
+    try {
+      const res = await fetch(`/api/groups/${id}/leave`, { method: "POST" });
+      if (!res.ok) {
+        const data = await res.json();
+        await confirm({ title: "Can't leave yet", message: data.error, mode: "alert" });
+        return;
+      }
+      router.push("/dashboard");
+    } finally {
+      setLeaving(false);
+    }
+  }
+
+  async function archiveGroup() {
+    const ok = await confirm({
+      title: "Archive this group?",
+      message: "It'll be hidden from your dashboard but nothing is deleted — you can unarchive it anytime.",
+      confirmLabel: "Archive",
+    });
+    if (!ok) return;
+
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/groups/${id}/archive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archived: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        await confirm({ title: "Couldn't archive", message: data.error, mode: "alert" });
+        return;
+      }
+      router.push("/dashboard");
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   const actionLoading =
     addingMember ||
     generatingInvite ||
@@ -866,7 +912,9 @@ export default function GroupDetailPage() {
     savingEdit ||
     deletingExpenseId !== null ||
     requestingPermissionId !== null ||
-    arbitratingId !== null;
+    arbitratingId !== null ||
+    leaving ||
+    archiving;
 
   const loaderLabel = initialLoading
     ? "Loading group"
@@ -886,7 +934,13 @@ export default function GroupDetailPage() {
                   ? "Sending request"
                   : arbitratingId !== null
                     ? "Resolving dispute"
-                    : "";
+                    : leaving
+                      ? "Leaving group"
+                      : archiving
+                        ? "Archiving group"
+                        : "";
+
+  const currentMember = members.find((m) => m.userId === currentUserId);
 
   return (
     <div className="group-page dash-page">
@@ -960,6 +1014,14 @@ export default function GroupDetailPage() {
           </button>
           <button className="group-action-btn" onClick={openStatementModal}>
             📊 Generate statement
+          </button>
+          {currentMember?.isAdmin && (
+            <button className="group-action-btn" onClick={archiveGroup} disabled={archiving}>
+              {archiving ? <Spinner /> : "📦 Archive group"}
+            </button>
+          )}
+          <button className="group-action-btn" onClick={leaveGroup} disabled={leaving} style={{ color: "#dc2626" }}>
+            {leaving ? <Spinner /> : "Leave group"}
           </button>
         </div>
 

@@ -53,10 +53,11 @@ model Group {
   name        String
   groupType   String        @default("trip")
   createdAt   DateTime      @default(now())
+  archivedAt  DateTime?
   members     GroupMember[]
   expenses    Expense[]
   invites     GroupInvite[]
-  settlements Settlement[]   // NEW — back-relation for Settlement.group
+  settlements Settlement[]
   messages     Message[]
   messageReads MessageRead[]
 }

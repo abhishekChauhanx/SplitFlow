@@ -7,7 +7,10 @@ export async function GET() {
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
 
   const groups = await prisma.group.findMany({
-    where: { members: { some: { userId } } },
+    where: {
+      members: { some: { userId } },
+      archivedAt: null, // hide archived groups from the default dashboard list
+    },
     include: { members: { include: { user: true } } },
   });
   return NextResponse.json(groups);
@@ -24,7 +27,7 @@ export async function POST(req: NextRequest) {
       name,
       groupType: groupType === "rent" ? "rent" : "trip",
       members: {
-        create: { userId, isAdmin: true }, // creator is admin by default
+        create: { userId, isAdmin: true },
       },
     },
   });
