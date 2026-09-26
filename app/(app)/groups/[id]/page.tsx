@@ -120,7 +120,7 @@ function DialogButton({
 
 export default function GroupDetailPage() {
   const { id } = useParams();
-  const { setSidebarSection, chatNotices, clearChatNoticesForGroup } = useAppShell();
+  const { setSidebarSection, chatNotices, clearChatNoticesForGroup, onlineUserIds } = useAppShell();
   const { confirm, prompt } = useModal();
   const [initialLoading, setInitialLoading] = useState(true);
   const [expenses, setExpenses] = useState<any[]>([]);
@@ -188,7 +188,8 @@ export default function GroupDetailPage() {
   const [lastIncomingChatMessage, setLastIncomingChatMessage] = useState<any>(null);
 
   const myPermissionsFetchIdRef = useRef(0);
-const pendingRequestsFetchIdRef = useRef(0);
+  const pendingRequestsFetchIdRef = useRef(0);
+
   function copyInviteLink() {
     if (!inviteLink) return;
     navigator.clipboard.writeText(inviteLink);
@@ -372,73 +373,72 @@ const pendingRequestsFetchIdRef = useRef(0);
     if (res.ok) setRecurringTemplates(await res.json());
   }, [id]);
 
- const loadPendingRequests = useCallback(() => {
-  const fetchId = ++pendingRequestsFetchIdRef.current;
+  const loadPendingRequests = useCallback(() => {
+    const fetchId = ++pendingRequestsFetchIdRef.current;
 
-  return fetch(`/api/edit-permissions/pending?groupId=${id}`)
-    .then((r) => r.json())
-    .then((data) => {
-      if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
-      if (Array.isArray(data)) setPendingRequests(data);
-    })
-    .catch(() => {});
-}, [id]);
+    return fetch(`/api/edit-permissions/pending?groupId=${id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
+        if (Array.isArray(data)) setPendingRequests(data);
+      })
+      .catch(() => {});
+  }, [id]);
 
+  const loadMyPermissions = useCallback(() => {
+    const fetchId = ++myPermissionsFetchIdRef.current;
 
- const loadMyPermissions = useCallback(() => {
-  const fetchId = ++myPermissionsFetchIdRef.current;
+    return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
+      .then((r) => r.json())
+      .then(async (data: any[]) => {
+        if (fetchId !== myPermissionsFetchIdRef.current) return;
+        if (!Array.isArray(data)) return;
 
-  return fetch(`/api/edit-permissions/my-requests?groupId=${id}`)
-    .then((r) => r.json())
-    .then(async (data: any[]) => {
-      if (fetchId !== myPermissionsFetchIdRef.current) return;
-      if (!Array.isArray(data)) return;
+        const map: Record<string, string> = {};
+        const idMap: Record<string, string> = {};
+        const seenExpenseIds = new Set<string>(); // track which expenses we've already taken the newest row for
 
-      const map: Record<string, string> = {};
-      const idMap: Record<string, string> = {};
-      const seenExpenseIds = new Set<string>(); // track which expenses we've already taken the newest row for
+        for (const p of data) {
+          if (!p.expense) continue;
 
-      for (const p of data) {
-        if (!p.expense) continue;
+          const alreadyNotified = p.notified || notifiedPermissionsRef.current.has(p.id);
 
-        const alreadyNotified = p.notified || notifiedPermissionsRef.current.has(p.id);
+          if (p.status === "approved" && !alreadyNotified) {
+            notifiedPermissionsRef.current.add(p.id);
+            await confirm({
+              title: "Permission approved",
+              message: `You can now edit or delete "${p.expense.description}".`,
+              mode: "alert",
+            });
+            fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
+          } else if (p.status === "denied" && !alreadyNotified) {
+            notifiedPermissionsRef.current.add(p.id);
+            await confirm({
+              title: "Permission denied",
+              message: `The expense creator declined your request to edit "${p.expense.description}".`,
+              mode: "alert",
+            });
+            fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
+          }
 
-        if (p.status === "approved" && !alreadyNotified) {
-          notifiedPermissionsRef.current.add(p.id);
-          await confirm({
-            title: "Permission approved",
-            message: `You can now edit or delete "${p.expense.description}".`,
-            mode: "alert",
-          });
-          fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
-        } else if (p.status === "denied" && !alreadyNotified) {
-          notifiedPermissionsRef.current.add(p.id);
-          await confirm({
-            title: "Permission denied",
-            message: `The expense creator declined your request to edit "${p.expense.description}".`,
-            mode: "alert",
-          });
-          fetch(`/api/edit-permissions/${p.id}/acknowledge`, { method: "POST" });
-        }
-
-        // data is ordered newest-first — only the first row we see per
-        // expense should decide what the row's current lock state is.
-        if (!seenExpenseIds.has(p.expenseId)) {
-          seenExpenseIds.add(p.expenseId);
-          if (p.status !== "denied") {
-            map[p.expenseId] = p.status;
-            idMap[p.expenseId] = p.id;
+          // data is ordered newest-first — only the first row we see per
+          // expense should decide what the row's current lock state is.
+          if (!seenExpenseIds.has(p.expenseId)) {
+            seenExpenseIds.add(p.expenseId);
+            if (p.status !== "denied") {
+              map[p.expenseId] = p.status;
+              idMap[p.expenseId] = p.id;
+            }
           }
         }
-      }
 
-      if (fetchId !== myPermissionsFetchIdRef.current) return;
+        if (fetchId !== myPermissionsFetchIdRef.current) return;
 
-      setMyPermissions(map);
-      setPendingRequestIds(idMap);
-    })
-    .catch(() => {});
-}, [confirm, id]);
+        setMyPermissions(map);
+        setPendingRequestIds(idMap);
+      })
+      .catch(() => {});
+  }, [confirm, id]);
 
   // Realtime replaces the old 8s setInterval — any INSERT/UPDATE on
   // EditPermission triggers a refetch of this group's pending requests
@@ -514,51 +514,51 @@ const pendingRequestsFetchIdRef = useRef(0);
     loadPendingRequests();
   }
 
- async function requestEditPermission(expenseId: string, action: string) {
-  setRequestingPermissionId(expenseId);
-  try {
-    const res = await fetch(`/api/groups/${id}/expenses/${expenseId}/request-edit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action }),
-    });
-    const data = await res.json();
+  async function requestEditPermission(expenseId: string, action: string) {
+    setRequestingPermissionId(expenseId);
+    try {
+      const res = await fetch(`/api/groups/${id}/expenses/${expenseId}/request-edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json();
 
-    if (data.approved) {
-      // Mark it approved immediately so the row's lock icon clears
-      // right away, instead of waiting on the realtime refetch.
-      setMyPermissions((prev) => ({ ...prev, [expenseId]: "approved" }));
+      if (data.approved) {
+        // Mark it approved immediately so the row's lock icon clears
+        // right away, instead of waiting on the realtime refetch.
+        setMyPermissions((prev) => ({ ...prev, [expenseId]: "approved" }));
 
-      setEditingExpense(expenseId);
-      const expense = expenses.find((e) => e.id === expenseId);
-      if (expense) {
-        setEditDesc(expense.description);
-        setEditAmount((expense.amountPaise / 100).toString());
-        setEditPaidById(expense.paidById);
+        setEditingExpense(expenseId);
+        const expense = expenses.find((e) => e.id === expenseId);
+        if (expense) {
+          setEditDesc(expense.description);
+          setEditAmount((expense.amountPaise / 100).toString());
+          setEditPaidById(expense.paidById);
+        }
+      } else if (data.reason === "already_pending") {
+        setRequestingPermissionId(null);
+        await confirm({
+          title: "Already requested",
+          message: "You've already requested this — waiting on the expense creator to respond.",
+          mode: "alert",
+        });
+        setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+        return;
+      } else {
+        setRequestingPermissionId(null);
+        await confirm({
+          title: "Request sent",
+          message: "The creator of this expense has been notified. You'll see an update here once they respond.",
+          mode: "alert",
+        });
+        setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
+        return;
       }
-    } else if (data.reason === "already_pending") {
+    } finally {
       setRequestingPermissionId(null);
-      await confirm({
-        title: "Already requested",
-        message: "You've already requested this — waiting on the expense creator to respond.",
-        mode: "alert",
-      });
-      setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
-      return;
-    } else {
-      setRequestingPermissionId(null);
-      await confirm({
-        title: "Request sent",
-        message: "The creator of this expense has been notified. You'll see an update here once they respond.",
-        mode: "alert",
-      });
-      setMyPermissions((prev) => ({ ...prev, [expenseId]: "pending" }));
-      return;
     }
-  } finally {
-    setRequestingPermissionId(null);
   }
-}
 
   async function deleteExpense(expenseId: string) {
     const ok = await confirm({
@@ -1347,6 +1347,7 @@ const pendingRequestsFetchIdRef = useRef(0);
             incomingMessage={lastIncomingChatMessage}
             currentUserName={members.find((m) => m.userId === currentUserId)?.user?.name || "Someone"}
             members={members}
+            onlineUserIds={onlineUserIds}
           />
         )}
       </ChatPanel>

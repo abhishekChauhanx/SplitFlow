@@ -3,9 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import MessageList from "@/components/chat/MessageList";
 import MessageComposer from "@/components/chat/MessageComposer";
-import { generateClientId } from "@/lib/offline-queue";
+import Spinner from "@/components/Spinner";
+import { generateClientId, getQueuedMessages } from "@/lib/offline-queue";
+import { syncQueuedMessages } from "@/lib/sync-queue";
 import { useOnlineStatus } from "@/components/useOnlineStatus";
 import { useTypingIndicator } from "@/lib/use-typing-indicator";
+import { useGroupReadReceipts } from "@/lib/use-group-read-receipts";
 
 export default function GroupChat({
   groupId,
@@ -13,7 +16,8 @@ export default function GroupChat({
   currentUserName,
   active,
   incomingMessage,
-  members
+  members,
+  onlineUserIds,
 }: {
   groupId: string;
   currentUserId: string | null;
@@ -21,11 +25,13 @@ export default function GroupChat({
   active: boolean;
   incomingMessage: any | null;
   members: { userId: string; user: { name: string | null; email: string | null } }[];
+  onlineUserIds: Set<string>;
 }) {
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const isOnline = useOnlineStatus();
   const { typingUsers, notifyTyping } = useTypingIndicator(groupId, currentUserId, currentUserName);
+  const readMap = useGroupReadReceipts(groupId);
 
   const markRead = useCallback(() => {
     fetch(`/api/groups/${groupId}/messages/read`, { method: "POST" }).catch(() => {});
@@ -45,8 +51,26 @@ export default function GroupChat({
     if (active) markRead();
   }, [active, markRead]);
 
-  // reconciles both new messages (INSERT) and edits/deletes (UPDATE) —
-  // the listener sends both event types through this same callback
+  useEffect(() => {
+    if (!isOnline) return;
+
+    (async () => {
+      const queued = await getQueuedMessages();
+      const forThisGroup = queued.filter((q) => q.groupId === groupId);
+      if (forThisGroup.length === 0) return;
+
+      await syncQueuedMessages((syncedGroupId, saved) => {
+        if (syncedGroupId !== groupId) return;
+        setMessages((prev) => {
+          const alreadyThere = prev.some((m) => m.clientId === saved.clientId);
+          return alreadyThere
+            ? prev.map((m) => (m.clientId === saved.clientId ? saved : m))
+            : [...prev, saved];
+        });
+      });
+    })();
+  }, [isOnline, groupId]);
+
   useEffect(() => {
     if (!incomingMessage) return;
     setMessages((prev) => {
@@ -56,45 +80,45 @@ export default function GroupChat({
           m.clientId === incomingMessage.clientId ? { ...incomingMessage, sender: m.sender } : m
         );
       }
-      loadHistory(); // new message from someone else — refetch to get joined sender info
+      loadHistory();
       return prev;
     });
     if (active) markRead();
   }, [incomingMessage, active, markRead, loadHistory]);
 
   async function send(body: string, mentionIds: string[]) {
-  const clientId = generateClientId();
-  const optimistic = {
-    id: `pending-${clientId}`,
-    clientId,
-    body,
-    mentionIds,
-    createdAt: new Date().toISOString(),
-    pendingSync: true,
-    sender: { id: currentUserId, name: "You", email: null },
-  };
-  setMessages((prev) => [...prev, optimistic]);
+    const clientId = generateClientId();
+    const optimistic = {
+      id: `pending-${clientId}`,
+      clientId,
+      body,
+      mentionIds,
+      createdAt: new Date().toISOString(),
+      pendingSync: true,
+      sender: { id: currentUserId, name: "You", email: null },
+    };
+    setMessages((prev) => [...prev, optimistic]);
 
-  if (!isOnline) {
-    const { enqueueMessage } = await import("@/lib/offline-queue");
-    await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() }); // mentionIds not queued offline yet — acceptable gap for now
-    return;
-  }
+    if (!isOnline) {
+      const { enqueueMessage } = await import("@/lib/offline-queue");
+      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
+      return;
+    }
 
-  try {
-    const res = await fetch(`/api/groups/${groupId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body, clientId, mentionIds }),
-    });
-    if (!res.ok) throw new Error();
-    const saved = await res.json();
-    setMessages((prev) => prev.map((m) => (m.clientId === clientId ? saved : m)));
-  } catch {
-    const { enqueueMessage } = await import("@/lib/offline-queue");
-    await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
+    try {
+      const res = await fetch(`/api/groups/${groupId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body, clientId, mentionIds }),
+      });
+      if (!res.ok) throw new Error();
+      const saved = await res.json();
+      setMessages((prev) => prev.map((m) => (m.clientId === clientId ? saved : m)));
+    } catch {
+      const { enqueueMessage } = await import("@/lib/offline-queue");
+      await enqueueMessage({ clientId, groupId, body, createdAt: Date.now() });
+    }
   }
-}
 
   async function remove(messageId: string) {
     setMessages((prev) =>
@@ -114,12 +138,16 @@ export default function GroupChat({
       body: JSON.stringify({ body: newBody }),
     }).catch(() => null);
     if (!res || !res.ok) {
-      setMessages(prevMessages); // roll back on failure
+      setMessages(prevMessages);
     }
   }
 
   if (loading) {
-    return <div className="chat-list chat-list-empty"><p>Loading chat…</p></div>;
+    return (
+      <div className="chat-list chat-list-empty">
+        <Spinner />
+      </div>
+    );
   }
 
   return (
@@ -133,20 +161,23 @@ export default function GroupChat({
       <MessageList
         messages={messages}
         currentUserId={currentUserId}
+        members={members}
+        onlineUserIds={onlineUserIds}
+        readMap={readMap}
         onDelete={remove}
         onSaveEdit={saveEdit}
       />
 
-     {typingUsers.length > 0 && (
-  <div className="chat-typing-indicator">
-    <span className="chat-typing-dots"><span></span><span></span><span></span></span>
-    <span className="chat-typing-text">
-      {typingUsers.length === 1
-        ? `${typingUsers[0]} is typing…`
-        : `${typingUsers.join(", ")} are typing…`}
-    </span>
-  </div>
-)}
+      {typingUsers.length > 0 && (
+        <div className="chat-typing-indicator">
+          <span className="chat-typing-dots"><span></span><span></span><span></span></span>
+          <span className="chat-typing-text">
+            {typingUsers.length === 1
+              ? `${typingUsers[0]} is typing…`
+              : `${typingUsers.join(", ")} are typing…`}
+          </span>
+        </div>
+      )}
 
       <MessageComposer onSend={send} onTyping={notifyTyping} members={members} currentUserId={currentUserId} />
     </div>
