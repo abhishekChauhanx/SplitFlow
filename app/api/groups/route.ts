@@ -2,16 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUserId } from "@/lib/session";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const status = req.nextUrl.searchParams.get("status") || "active"; // "active" | "archived" | "all"
+
+  const archivedFilter =
+    status === "archived" ? { archivedAt: { not: null } }
+    : status === "all" ? {}
+    : { archivedAt: null }; // "active" — default, matches current behavior
 
   const groups = await prisma.group.findMany({
     where: {
       members: { some: { userId } },
-      archivedAt: null, // hide archived groups from the default dashboard list
+      ...archivedFilter,
     },
     include: { members: { include: { user: true } } },
+    orderBy: { createdAt: "desc" },
   });
   return NextResponse.json(groups);
 }

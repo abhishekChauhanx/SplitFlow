@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import RefreshButton from "@/components/RefreshButton";
 import Spinner from "@/components/Spinner";
@@ -14,6 +14,14 @@ import { useAppShell } from "@/components/app-shell/AppShellContext";
 import "../../home.css";
 import "./dashboard.css";
 
+type GroupFilter = "active" | "archived" | "all";
+
+const FILTER_LABELS: Record<GroupFilter, string> = {
+  active: "Normal groups",
+  archived: "Archived groups",
+  all: "All groups",
+};
+
 export default function DashboardPage() {
   const { confirm } = useModal();
   const { search, registerInfoHandler } = useAppShell();
@@ -25,11 +33,15 @@ export default function DashboardPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [showInfoOverlay, setShowInfoOverlay] = useState(false);
 
-  const loadGroups = useCallback(async () => {
-    const res = await fetch("/api/groups");
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>("active");
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
+
+  const loadGroups = useCallback(async (filter: GroupFilter = groupFilter) => {
+    const res = await fetch(`/api/groups?status=${filter}`);
     const data = await res.json();
     setGroups(data);
-  }, []);
+  }, [groupFilter]);
 
   const loadSummary = useCallback(async () => {
     const res = await fetch("/api/dashboard/groups-summary");
@@ -43,6 +55,23 @@ export default function DashboardPage() {
   useEffect(() => {
     refreshAll().finally(() => setInitialLoading(false));
   }, [refreshAll]);
+
+  // Re-fetch whenever the filter changes (after the very first load)
+  useEffect(() => {
+    if (initialLoading) return;
+    loadGroups(groupFilter);
+  }, [groupFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Close the filter dropdown on outside click
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+        setFilterMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
 
   // Let AppShell's topbar "info" button open this page's overlay.
   useEffect(() => {
@@ -81,7 +110,11 @@ export default function DashboardPage() {
         body: JSON.stringify({ name: trimmedName }),
       });
       const group = await res.json();
-      setGroups([...groups, group]);
+      // Only splice it into the visible list if the current filter would
+      // actually show a brand-new (non-archived) group.
+      if (groupFilter !== "archived") {
+        setGroups([...groups, group]);
+      }
       setNewGroupName("");
       await loadSummary();
     } finally {
@@ -172,6 +205,37 @@ export default function DashboardPage() {
               {creatingGroup ? <Spinner /> : "Create"}
             </button>
           </div>
+
+          <div className="dash-group-filter-row">
+            <div ref={filterMenuRef} className="dash-group-filter">
+              <button
+                className="dash-group-filter-trigger"
+                onClick={() => setFilterMenuOpen((o) => !o)}
+              >
+                {FILTER_LABELS[groupFilter]}
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+
+              {filterMenuOpen && (
+                <div className="dash-group-filter-menu">
+                  {(Object.keys(FILTER_LABELS) as GroupFilter[]).map((key) => (
+                    <button
+                      key={key}
+                      className={`dash-group-filter-option${key === groupFilter ? " active" : ""}`}
+                      onClick={() => {
+                        setGroupFilter(key);
+                        setFilterMenuOpen(false);
+                      }}
+                    >
+                      {FILTER_LABELS[key]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="dash-section" style={{ marginTop: "1rem" }}>
@@ -180,7 +244,9 @@ export default function DashboardPage() {
               <p>
                 {search.trim()
                   ? `No groups match "${search.trim()}".`
-                  : "No groups yet — create your first one above to start splitting expenses."}
+                  : groupFilter === "archived"
+                    ? "No archived groups."
+                    : "No groups yet — create your first one above to start splitting expenses."}
               </p>
             </div>
           ) : (
@@ -191,12 +257,20 @@ export default function DashboardPage() {
                 const extraCount = memberCount - previewMembers.length;
 
                 return (
-                  <Link key={g.id} href={`/groups/${g.id}`} className="dash-group-card">
+                  <Link
+                    key={g.id}
+                    href={`/groups/${g.id}`}
+                    className={`dash-group-card${g.archivedAt ? " archived" : ""}`}
+                  >
                     <div className="dash-group-card-top">
                       <span className="dash-group-avatar">
                         {g.name?.[0]?.toUpperCase() || "?"}
                       </span>
-                      <span className="dash-group-arrow">→</span>
+                      {g.archivedAt ? (
+                        <span className="dash-group-archived-tag">Archived</span>
+                      ) : (
+                        <span className="dash-group-arrow">→</span>
+                      )}
                     </div>
                     <div>
                       <p className="dash-group-name">{g.name}</p>
