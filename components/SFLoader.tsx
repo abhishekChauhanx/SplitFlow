@@ -6,39 +6,28 @@ import "./SFLoader.css";
 interface SFLoaderProps {
   size?: number;
   duration?: number;
-  label?: string;
-  dotRadius?: number;
-  dotOffset?: number;
 }
 
 /**
- * SFLoader
- *
- * Uses native SVG <animate> / <animateTransform> — NOT CSS keyframes.
- * This is the only cross-browser reliable way to animate
- * stroke-dashoffset on an SVG rect.
- *
- * Props
- *   size      — square px size   (default 200)
- *   duration  — loop seconds     (default 3)
- *   label     — centre text      (default "SF")
- *   dotRadius — corner dot size  (default 2.5)
- *   dotOffset — how far outside the top-left corner the dot sits, so it
- *               doesn't touch the border stroke (default 6)
+ * SFLoader — a single rotating gradient arc around two gently pulsing
+ * overlapping circles (the "split" mark). Themed via CSS variables that
+ * flip under a .dark ancestor class.
  */
-const SFLoader: React.FC<SFLoaderProps> = ({
-  size = 200,
-  duration = 3,
-  label = "SF",
-  dotRadius = 2.5,
-  dotOffset = 6,
-}) => {
-  const outerInset = 8;
-  const innerInset = 18;
-  const outerSize = size - outerInset * 2; // e.g. 184 at size=200
-  const innerSize = size - innerInset * 2; // e.g. 164 at size=200
-  const perimeter = innerSize * 4; // e.g. 656 at size=200
+const SFLoader: React.FC<SFLoaderProps> = ({ size = 140, duration = 1.4 }) => {
+  const frameInset = size * 0.08;
+  const frameSize = size - frameInset * 2;
+  const frameRadius = size * 0.22;
+
+  const ringRadius = size * 0.3;
+  const circumference = 2 * Math.PI * ringRadius;
+  const arcLength = circumference * 0.24;
+
+  const cx = size / 2;
+  const cy = size / 2;
   const dur = `${duration}s`;
+
+  const dotR = size * 0.11;
+  const offset = dotR * 0.55;
 
   return (
     <div className="sf-loader-wrapper">
@@ -51,84 +40,82 @@ const SFLoader: React.FC<SFLoaderProps> = ({
         aria-label="Loading"
         role="img"
       >
-        {/* ── dark background ── */}
-        <rect className="sf-bg" width={size} height={size} rx="2" />
+        <defs>
+          <linearGradient id="sf-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#4f46e5" />
+            <stop offset="100%" stopColor="#0ea5e9" />
+          </linearGradient>
+        </defs>
 
-        {/* ── outer decorative border ── */}
+        <rect className="sf-bg" width={size} height={size} />
+
         <rect
-          className="sf-border-outer"
-          x={outerInset}
-          y={outerInset}
-          width={outerSize}
-          height={outerSize}
+          className="sf-frame"
+          x={frameInset}
+          y={frameInset}
+          width={frameSize}
+          height={frameSize}
+          rx={frameRadius}
         />
 
-        {/* ── inner dim static track ── */}
-        <rect
-          className="sf-border-inner"
-          x={innerInset}
-          y={innerInset}
-          width={innerSize}
-          height={innerSize}
-        />
+        <circle className="sf-track" cx={cx} cy={cy} r={ringRadius} />
 
-        {/* ── centre label ── */}
-        <text
-          className="sf-label"
-          x={size / 2}
-          y={size / 2}
-          fontSize={size * 0.18}
-          letterSpacing={size * 0.03}
+        <circle
+          className="sf-arc"
+          cx={cx}
+          cy={cy}
+          r={ringRadius}
+          strokeDasharray={`${arcLength} ${circumference - arcLength}`}
         >
-          {label}
-        </text>
-
-        {/*
-          ── Animated border ──
-          strokeDasharray  = perimeter  → whole border = one dash
-          strokeDashoffset = perimeter  → dash starts fully offset (invisible)
-          <animate> drives offset from perimeter → 0 → border draws itself
-          This uses native SVG SMIL animation — works in all browsers,
-          no CSS var-in-keyframes bug.
-        */}
-        <rect
-          className="sf-border-animated"
-          x={innerInset}
-          y={innerInset}
-          width={innerSize}
-          height={innerSize}
-          strokeDasharray={perimeter}
-          strokeDashoffset={perimeter}
-        >
-          <animate
-            attributeName="stroke-dashoffset"
-            from={perimeter}
-            to={0}
+          <animateTransform
+            attributeName="transform"
+            type="rotate"
+            from={`0 ${cx} ${cy}`}
+            to={`360 ${cx} ${cy}`}
             dur={dur}
             repeatCount="indefinite"
-            calcMode="linear"
           />
-        </rect>
-
-        {/* ── top-left corner dot — sits outside the corner, not touching the border — pulses ── */}
-        <circle
-          className="sf-dot-tl"
-          cx={innerInset - dotOffset}
-          cy={innerInset - dotOffset}
-          r={dotRadius}
-        >
-          <animate attributeName="opacity" values="0.3;1;0.3" dur={dur} repeatCount="indefinite" />
         </circle>
-
-        {/* ── bottom-right corner dot — sits outside that corner, pulses out of phase ── */}
-        <circle
-          className="sf-dot-br"
-          cx={size - innerInset + dotOffset}
-          cy={size - innerInset + dotOffset}
-          r={dotRadius}
-        >
-          <animate attributeName="opacity" values="1;0.3;1" dur={dur} repeatCount="indefinite" />
-        </circle>
+<circle className="sf-circle-a" cx={cx - offset} cy={cy} r={dotR}>
+  <animate
+    attributeName="r"
+    values={`${dotR * 0.85};${dotR * 1.25};${dotR * 0.85}`}
+    keyTimes="0;0.5;1"
+    dur={`${duration * 1.8}s`}
+    calcMode="spline"
+    keySplines="0.45 0 0.55 1;0.45 0 0.55 1"
+    repeatCount="indefinite"
+  />
+  <animate
+    attributeName="opacity"
+    values="0.6;1;0.6"
+    keyTimes="0;0.5;1"
+    dur={`${duration * 1.8}s`}
+    calcMode="spline"
+    keySplines="0.45 0 0.55 1;0.45 0 0.55 1"
+    repeatCount="indefinite"
+  />
+</circle>
+<circle className="sf-circle-b" cx={cx + offset} cy={cy} r={dotR}>
+  <animate
+    attributeName="r"
+    values={`${dotR * 1.25};${dotR * 0.85};${dotR * 1.25}`}
+    keyTimes="0;0.5;1"
+    dur={`${duration * 1.8}s`}
+    calcMode="spline"
+    keySplines="0.45 0 0.55 1;0.45 0 0.55 1"
+    repeatCount="indefinite"
+  />
+  <animate
+    attributeName="opacity"
+    values="1;0.6;1"
+    keyTimes="0;0.5;1"
+    dur={`${duration * 1.8}s`}
+    calcMode="spline"
+    keySplines="0.45 0 0.55 1;0.45 0 0.55 1"
+    repeatCount="indefinite"
+  />
+</circle>
       </svg>
     </div>
   );
