@@ -857,52 +857,54 @@ export default function GroupDetailPage() {
   }
 
   async function leaveGroup() {
-    const ok = await confirm({
-      title: "Leave this group?",
-      message: "You'll lose access to this group's expenses and chat. This can't be undone — you'd need a new invite to rejoin.",
-      confirmLabel: "Leave group",
-    });
-    if (!ok) return;
+  const ok = await confirm({
+    title: "Leave this group?",
+    message: "You'll lose access to this group's expenses and chat. This can't be undone — you'd need a new invite to rejoin.",
+    confirmLabel: "Leave group",
+  });
+  if (!ok) return;
 
-    setLeaving(true);
-    try {
-      const res = await fetch(`/api/groups/${id}/leave`, { method: "POST" });
-      if (!res.ok) {
-        const data = await res.json();
-        await confirm({ title: "Can't leave yet", message: data.error, mode: "alert" });
-        return;
-      }
-      router.push("/dashboard");
-    } finally {
-      setLeaving(false);
+  setLeaving(true);
+  try {
+    const res = await fetch(`/api/groups/${id}/leave`, { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json();
+      setLeaving(false); // clear the loader BEFORE opening the blocking dialog
+      await confirm({ title: "Can't leave yet", message: data.error, mode: "alert" });
+      return;
     }
+    router.push("/dashboard");
+  } finally {
+    setLeaving(false); // safe no-op if already cleared above
   }
+}
 
   async function archiveGroup() {
-    const ok = await confirm({
-      title: "Archive this group?",
-      message: "It'll be hidden from your dashboard but nothing is deleted — you can unarchive it anytime.",
-      confirmLabel: "Archive",
-    });
-    if (!ok) return;
+  const ok = await confirm({
+    title: "Archive this group?",
+    message: "It'll be hidden from your dashboard but nothing is deleted — you can unarchive it anytime.",
+    confirmLabel: "Archive",
+  });
+  if (!ok) return;
 
-    setArchiving(true);
-    try {
-      const res = await fetch(`/api/groups/${id}/archive`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived: true }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        await confirm({ title: "Couldn't archive", message: data.error, mode: "alert" });
-        return;
-      }
-      router.push("/dashboard");
-    } finally {
-      setArchiving(false);
+  setArchiving(true);
+  try {
+    const res = await fetch(`/api/groups/${id}/archive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ archived: true }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      setArchiving(false); // clear the loader BEFORE opening the blocking dialog
+      await confirm({ title: "Couldn't archive", message: data.error, mode: "alert" });
+      return;
     }
+    router.push("/dashboard");
+  } finally {
+    setArchiving(false);
   }
+}
 
   const actionLoading =
     addingMember ||
