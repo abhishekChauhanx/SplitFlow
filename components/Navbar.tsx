@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import UserAvatarMenu from "@/components/UserAvatarMenu";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -31,9 +31,14 @@ export default function Navbar({
   variant?: "full" | "minimal";
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { me, checkingAuth, clearMe } = useAuth();
   const shell = useOptionalAppShell(); // null on public pages
   const inApp = shell !== null;
+
+  // The group search box only does something on the dashboard (it filters
+  // the dashboard's group list), so it's hidden on every other page.
+  const showSearch = pathname === "/dashboard";
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -177,16 +182,18 @@ export default function Navbar({
       <header className="dash-topbar">
         {brand}
 
-        <div className="dash-topbar-search">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>
-          <input
-            value={shell.search}
-            onChange={(e) => shell.setSearch(e.target.value)}
-            placeholder="Search your groups..."
-          />
-        </div>
+        {showSearch && (
+          <div className="dash-topbar-search">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+            </svg>
+            <input
+              value={shell.search}
+              onChange={(e) => shell.setSearch(e.target.value)}
+              placeholder="Search your groups..."
+            />
+          </div>
+        )}
 
         <div className="dash-topbar-actions">{actions}</div>
       </header>
