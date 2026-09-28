@@ -1,15 +1,13 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
-import DashboardTopBar from "@/components/dashboard/DashboardTopBar";
+import Navbar from "@/components/Navbar";
 import { AppShellContext, SidebarSection, ChatNotice } from "./AppShellContext";
 import { useEditPermissionRealtime } from "@/lib/use-edit-permission-realtime";
 import { useGlobalPresence } from "@/lib/use-global-presence";
 import "@/components/dashboard/dashboard-shell.css";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [me, setMe] = useState<{ userId?: string; name?: string; email?: string } | null>(null);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [search, setSearch] = useState("");
@@ -24,6 +22,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     infoHandlerRef.current = fn;
   }, []);
 
+  const openInfo = useCallback(() => {
+    infoHandlerRef.current?.();
+  }, []);
+
   const loadMe = useCallback(async () => {
     const res = await fetch("/api/me");
     if (res.ok) setMe(await res.json());
@@ -35,19 +37,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const res = await fetch("/api/edit-permissions/pending");
     if (res.ok) {
       const data = await res.json();
-      if (fetchId !== pendingRequestsFetchIdRef.current) return;
+      if (fetchId !== pendingRequestsFetchIdRef.current) return; // stale response, drop it
       if (Array.isArray(data)) setPendingRequests(data);
     }
   }, []);
 
+  // Catch-up fetch: unread chat messages from before this session started
   const loadUnreadChatNotices = useCallback(async () => {
     const res = await fetch("/api/notifications/unread-messages");
     if (!res.ok) return;
     const notices: ChatNotice[] = await res.json();
     setChatNotices((prev) => {
       const existingIds = new Set(prev.map((n) => n.id));
-      const merged = [...prev, ...notices.filter((n) => !existingIds.has(n.id))];
-      return merged;
+      return [...prev, ...notices.filter((n) => !existingIds.has(n.id))];
     });
   }, []);
 
@@ -58,14 +60,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision }),
       });
-      refreshPendingRequests();
+      await refreshPendingRequests();
     },
     [refreshPendingRequests]
   );
 
   const pushChatNotice = useCallback((notice: ChatNotice) => {
     setChatNotices((prev) => {
-      if (prev.some((n) => n.id === notice.id)) return prev;
+      if (prev.some((n) => n.id === notice.id)) return prev; // dedupe by clientId
       return [notice, ...prev];
     });
   }, []);
@@ -78,11 +80,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setChatNotices((prev) => prev.filter((n) => n.id !== id));
   }, []);
 
-  async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
-  }
-
+  // Realtime replaces polling — any INSERT/UPDATE on EditPermission
+  // triggers a single refetch of the joined, shaped list.
   useEditPermissionRealtime(me?.userId ?? null, () => {
     refreshPendingRequests();
   });
@@ -100,7 +99,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         setSearch,
         pendingRequests,
         refreshPendingRequests,
+        respondToRequest,
         registerInfoHandler,
+        openInfo,
         sidebarSection,
         setSidebarSection,
         chatNotices,
@@ -111,17 +112,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       }}
     >
       <div className="dash-shell">
-        <DashboardTopBar
-          me={me}
-          pendingRequests={pendingRequests}
-          chatNotices={chatNotices}
-          onDismissChatNotice={dismissChatNotice}
-          onRespond={respondToRequest}
-          onOpenInfo={() => infoHandlerRef.current?.()}
-          onLogout={handleLogout}
-          search={search}
-          onSearchChange={setSearch}
-        />
+        <Navbar />
         <div className="dash-shell-body">
           <Sidebar section={sidebarSection} />
           <main className="dash-main">{children}</main>

@@ -13,7 +13,7 @@ export type SidebarSection = {
 } | null;
 
 export type ChatNotice = {
-  id: string;
+  id: string; // use the message's clientId — prevents duplicate notices on retry/reconnect
   groupId: string;
   groupName: string;
   preview: string;
@@ -25,7 +25,9 @@ type AppShellCtx = {
   setSearch: (v: string) => void;
   pendingRequests: any[];
   refreshPendingRequests: () => Promise<void>;
+  respondToRequest: (id: string, decision: "approved" | "denied") => Promise<void>;
   registerInfoHandler: (fn: (() => void) | null) => void;
+  openInfo: () => void;
   sidebarSection: SidebarSection;
   setSidebarSection: (section: SidebarSection) => void;
   chatNotices: ChatNotice[];
@@ -41,6 +43,12 @@ export function useAppShell() {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error("useAppShell must be used inside AppShell");
   return ctx;
+}
+
+// Same context, but returns null outside AppShell instead of throwing.
+// Lets shared components (like Navbar) adapt to where they're rendered.
+export function useOptionalAppShell() {
+  return useContext(Ctx);
 }
 
 export { Ctx as AppShellContext };
