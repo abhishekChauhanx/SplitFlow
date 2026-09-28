@@ -1,0 +1,28 @@
+.sf-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 99999; /* above your SFLoaderOverlay (9999) and the navbar */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #18181b; /* the wordmark inherits this */
+  opacity: 1;
+  transition: opacity 0.45s ease;
+}
+
+.dark .sf-splash {
+  background: #0a0a0a;
+  color: #ffffff;
+}
+
+.sf-splash--leave {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Set by the tiny inline script in <head> before first paint, so returning
+   visitors in the same session never see even a one-frame flash of it. */
+html[data-splash-seen] .sf-splash {
+  display: none;
+}

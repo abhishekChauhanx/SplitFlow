@@ -1,0 +1,76 @@
+.sf-logo-anim {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  color: inherit; /* takes the theme color from the parent Link */
+  line-height: 1;
+}
+
+.sf-logo-anim svg {
+  display: block;
+  overflow: visible;
+}
+
+/* Base styles are the FINAL state, so reduced-motion / static just works.
+   The animations below use fill-mode "both" to start from the hidden state. */
+.sf-logo-anim__a,
+.sf-logo-anim__b {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sf-logo-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.sf-logo-anim__a {
+  --sf-o: 1;
+}
+
+.sf-logo-anim__b {
+  --sf-o: 0.92;
+  animation-delay: 0.18s;
+}
+
+.sf-logo-anim__text {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  animation: sf-logo-reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.85s both;
+}
+
+@keyframes sf-logo-pop {
+  from {
+    opacity: 0;
+    transform: scale(0);
+  }
+  to {
+    opacity: var(--sf-o);
+    transform: scale(1);
+  }
+}
+
+@keyframes sf-logo-reveal {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+    transform: translateX(0);
+  }
+}
+
+/* No animation: `animate={false}` prop, or user prefers reduced motion */
+.sf-logo-anim--static .sf-logo-anim__a,
+.sf-logo-anim--static .sf-logo-anim__b,
+.sf-logo-anim--static .sf-logo-anim__text {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-logo-anim__a,
+  .sf-logo-anim__b,
+  .sf-logo-anim__text {
+    animation: none;
+  }
+}

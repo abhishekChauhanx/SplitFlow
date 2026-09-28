@@ -5,6 +5,7 @@ import { ModalProvider } from "@/components/ModalProvider";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthProvider";
+import SplashScreen from "@/components/SplashScreen/SplashScreen";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -39,6 +40,17 @@ const THEME_INIT_SCRIPT = `
 })();
 `;
 
+// Runs right after the theme script, before first paint. If this browser
+// session already saw the splash, mark <html> so the CSS hides it at once
+// (no one-frame flash for returning visitors).
+const SPLASH_GUARD_SCRIPT = `
+try {
+  if (sessionStorage.getItem('sf-splash-seen')) {
+    document.documentElement.setAttribute('data-splash-seen', '1');
+  }
+} catch (e) {}
+`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -52,8 +64,10 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: SPLASH_GUARD_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <SplashScreen />
         <ThemeProvider>
           <AuthProvider>
             <ModalProvider>{children}</ModalProvider>
