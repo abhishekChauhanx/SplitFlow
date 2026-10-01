@@ -28,7 +28,7 @@ export default function Navbar({
   /** Only matters on public pages (outside AppShell).
    *  "full": logged-out users see Log in / Sign up.
    *  "minimal": hides them — for /login and /signup themselves. */
-  variant?: "full" | "minimal";
+  variant?: "full" | "minimal" | "onboarding";
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -48,9 +48,9 @@ export default function Navbar({
 
   const combinedItems: CombinedItem[] = shell
     ? [
-        ...(shell.pendingRequests as PendingRequest[]).map((r) => ({ kind: "request" as const, data: r })),
-        ...shell.chatNotices.map((c) => ({ kind: "chat" as const, data: c })),
-      ]
+      ...(shell.pendingRequests as PendingRequest[]).map((r) => ({ kind: "request" as const, data: r })),
+      ...shell.chatNotices.map((c) => ({ kind: "chat" as const, data: c })),
+    ]
     : [];
 
   const brand = (
@@ -125,7 +125,7 @@ export default function Navbar({
     <UserAvatarMenu
       name={me?.name}
       email={me?.email}
-      onOpenInfo={shell ? shell.openInfo : () => {}}
+      onOpenInfo={shell ? shell.openInfo : () => { }}
       onLogout={handleLogout}
     />
   );
@@ -141,7 +141,16 @@ export default function Navbar({
     );
   } else if (checkingAuth) {
     actions = <div className="h-9 w-24 animate-pulse rounded-full bg-zinc-200 dark:bg-white/10" />;
-  } else if (me) {
+  } else if (variant === "onboarding") {
+    actions = (
+      <>
+        <ThemeToggle />
+      </>
+    )
+
+  }
+
+  else if (me) {
     actions = (
       <>
         <ThemeToggle />
@@ -152,6 +161,7 @@ export default function Navbar({
           Dashboard
         </Link>
         {avatar}
+
       </>
     );
   } else if (variant === "full") {
@@ -172,7 +182,9 @@ export default function Navbar({
         </Link>
       </>
     );
-  } else {
+  }
+
+  else {
     actions = <ThemeToggle />;
   }
 

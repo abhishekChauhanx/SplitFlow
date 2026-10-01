@@ -38,7 +38,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white font-sans text-zinc-900 antialiased transition-colors dark:bg-black dark:text-white">
-      <Navbar />
+      <Navbar variant="onboarding" />
       <SFLoaderOverlay visible={loading} label="Saving your details" />
 
       {/* Hero-style header, same glow/grid treatment as home */}
